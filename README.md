@@ -5,11 +5,12 @@
 
 ## 项目状态
 
-- 当前阶段：**Day 1 / 项目设计与仓库骨架搭建**
+- 当前阶段：**Week 1 / 硬件、数据与最小训练闭环**
 - 计划周期：**4–6 周**
-- 主要平台：RealMan RM-65B + 双相机 + SpaceMouse + 二指软夹爪
-- 主要训练资源：Ubuntu 22.04，2 × RTX 3090，64 GB RAM
+- 主要平台：无独显 Windows 控制机 + RM-65B + 腕部 RGB-D / 固定第三视角 RGB 相机 + SpaceMouse + 二指软夹爪
+- 主要训练资源：Ubuntu 22.04 GPU 服务器，2 × RTX 3090，64 GB RAM
 - 目标：在真实机械臂上跑通从数据采集到策略部署、人工纠错和再次微调的完整链路
+- 详细进度：[项目路线图](docs/roadmap.md) · [每日计划与日志](docs/daily/) · [最近工作日志](docs/daily/2026-07-23/log.md)
 
 ---
 
@@ -111,14 +112,27 @@ action = [Δx, Δy, Δz, gripper_angle]
 
 ### 4.1 机器人平台
 
-- RealMan RM-65B 六自由度机械臂；
+- RealMan RM65 六自由度机械臂，用户设备标识为 RM65-6F，控制器自报 `force_type=6FB` 一体化六维力版本；
 - 可连续控制开合角度的二指软夹爪；
-- 腕部相机；
-- 外部 RealSense 相机；
+- 腕部 RGB-D 相机，用于目标局部 XYZ 精定位与抓取观察；
+- 固定安装的第三视角 RGB 相机，用于全局观测、模型视觉输入和桌面 XY 粗定位；
 - 3Dconnexion SpaceMouse；
 - 可选扩展：三指/五指灵巧手及触觉传感。
 
-### 4.2 训练服务器
+第三视角相机应在正式采集、训练测试和部署期间保持固定的安装位置、画面范围、分辨率、曝光和白平衡。若它为共享控制提供目标位置，应通过桌面平面单应性完成像素到机器人桌面 XY 坐标的映射；若只作为 ACT/VLA 的 RGB 输入，则不以精确机器人外参标定为前置条件。
+
+### 4.2 Windows 控制机
+
+Windows 控制机无独立 GPU，承担所有与硬件直接相连且必须本地完成的工作：
+
+- RM-65B、夹爪、SpaceMouse 与双相机连接；
+- 人工遥操作、共享控制融合与本地安全过滤；
+- 传感器时间同步、原始 episode 记录与数据校验；
+- 在自主部署时接收策略动作，并保留最终执行权与人工接管权。
+
+这些采集与控制工作应尽量保持 CPU 可实时运行，不依赖 GPU 服务器在线。
+
+### 4.3 Ubuntu GPU 服务器
 
 - Ubuntu 22.04；
 - 2 × NVIDIA RTX 3090；
@@ -131,38 +145,50 @@ action = [Δx, Δy, Δz, gripper_angle]
 - 双卡数据并行；
 - 真机推理前的离线验证。
 
+Manual / SharedAutonomy 数据采集只需要 Windows 控制机；离线训练时将完整 episode 从 Windows 复制到服务器。只有 ACT/VLA 真机自主部署时，服务器才通过有线局域网提供推理结果；机器人底层控制、安全检查和人工接管始终保留在 Windows 本地。
+
 ---
 
 ## 5. 系统架构
 
 ```mermaid
 flowchart LR
-    T[Task instruction] --> H[Human operator]
-    H -->|SpaceMouse command| I[Intent inference]
-    H -->|Human action| A[Arbitrator]
+    subgraph Windows[Windows Robot Host - no discrete GPU]
+        T[Task instruction] --> H[Human operator]
+        H -->|SpaceMouse command| I[Intent inference]
+        H -->|Human action| A[Arbitrator]
 
-    C[Wrist + external cameras] --> R[Recorder]
-    S[Robot state] --> R
+        C[Wrist RGB-D + fixed external RGB] --> O[Synced observation]
+        Robot[RM-65B + gripper] --> S[Robot state]
+        S --> O
 
-    I --> L[Local assist policy]
-    L -->|Assist action| A
-    I -->|Belief / confidence| A
+        I --> L[Local assist policy]
+        L -->|Assist action| A
+        I -->|Belief / confidence| A
+        A --> SF[Local safety supervisor]
+        SF -->|Executed action| Robot
 
-    A -->|Executed action| Robot[RM-65B + gripper]
-    Robot --> S
+        O --> R[Dataset recorder]
+        H -->|Human action| R
+        L -->|Assist action| R
+        SF -->|Executed action / authority| R
+        T --> R
 
-    H -->|Human action| R
-    L -->|Assist action| R
-    A -->|Executed action / authority| R
-    T --> R
+        O --> PC[Policy client]
+        PC -->|Suggested policy action| SF
+    end
 
     R --> D[LeRobot-style dataset]
-    D --> ACT[Task-conditioned ACT]
-    D --> VLA[Language-conditioned VLA]
 
-    ACT --> E[Real-robot evaluation]
-    VLA --> E
+    subgraph Ubuntu[Ubuntu GPU Server]
+        Train[ACT / VLA training and analysis]
+        Infer[ACT / VLA inference service]
+    end
 
+    D -->|Offline dataset transfer| Train
+    PC <-->|Wired LAN: observations / action chunks| Infer
+
+    Infer --> E[Real-robot evaluation]
     E -->|Failure| X[Human intervention]
     X --> CD[Corrective demonstrations]
     CD --> D
@@ -478,10 +504,11 @@ sharedautonomy-vla/
 │   ├── test_time_sync.py
 │   └── test_safety_filter.py
 ├── docs/
-│   ├── architecture.md
-│   ├── hardware_setup.md
-│   ├── dataset.md
-│   └── experiments.md
+│   ├── roadmap.md
+│   ├── daily/
+│   ├── decisions/
+│   ├── engineering_conventions.md
+│   └── hardware_setup.md
 └── assets/
     ├── setup.jpg
     ├── architecture.png
@@ -490,107 +517,19 @@ sharedautonomy-vla/
 
 ---
 
-## 12. 4–6 周里程碑
+## 12. 项目进度与文档导航
 
-### Week 1：硬件、数据与最小训练闭环
+README 只维护长期稳定的项目说明。阶段目标、每日执行清单和历史记录分别维护在：
 
-- [ ] 创建仓库和目录骨架；
-- [ ] 接入 RM-65B、夹爪、SpaceMouse 和双相机；
-- [ ] 确定统一坐标系和动作表示；
-- [ ] 完成时间同步；
-- [ ] 采集并回放 10 条人工轨迹；
-- [ ] 建立数据校验和可视化工具；
-- [ ] 用小数据完成 ACT/VLA smoke test。
+- [项目路线图](docs/roadmap.md)：4–6 周阶段目标、当前进度和验收标准；
+- [每日计划与日志](docs/daily/)：每日工作流程、模板和日期索引；
+- [2026-07-23 工作计划](docs/daily/2026-07-23/plan.md)：首日执行清单；
+- [2026-07-23 工作日志](docs/daily/2026-07-23/log.md)：首日实验结果、结论和下一工作日建议；
+- [硬件配置与测试结论](docs/hardware_setup.md)：硬件能力、延迟、安全验证和本机配置边界；
+- [工程约定](docs/engineering_conventions.md)：代码风格、日志、配置和测试要求；
+- [架构决策记录](docs/decisions/)：需要长期追溯的重要接口和设计决策。
 
-验收标准：
-
-> 一条命令开始采集，一条命令检查数据，一条命令启动最小训练。
-
-### Week 2：SharedAutonomy 采集器
-
-- [ ] 目标检测和工作空间标定；
-- [ ] 候选目标意图推理；
-- [ ] 局部趋近辅助器；
-- [ ] 动态 authority；
-- [ ] 安全过滤和动作限幅；
-- [ ] 同步记录三路动作与 belief。
-
-验收标准：
-
-> Manual 和 SharedAutonomy 均可稳定完成 reaching，并开始抓取放置。
-
-### Week 3：正式数据与 ACT
-
-- [ ] Manual 数据集；
-- [ ] SharedAutonomy 数据集；
-- [ ] 数据清洗和质量统计；
-- [ ] ACT-Manual；
-- [ ] ACT-SharedAutonomy；
-- [ ] 真机 rollout 与第一版结果。
-
-### Week 4：小型 VLA
-
-- [ ] 语言任务字段；
-- [ ] VLA LoRA smoke test；
-- [ ] VLA-Manual；
-- [ ] VLA-SharedAutonomy；
-- [ ] 真机推理；
-- [ ] 初步泛化测试；
-- [ ] 发布可展示的 GitHub MVP。
-
-### Week 5：纠错数据闭环
-
-- [ ] 策略部署中的人工接管；
-- [ ] 保存失败上下文和恢复动作；
-- [ ] 采集 corrective episodes；
-- [ ] 再次微调；
-- [ ] 比较纠错前后性能。
-
-### Week 6：消融、扩展与整理
-
-按优先级选择：
-
-1. 数据规模消融；
-2. 等数据量与等采集时间对照；
-3. 位置与语言泛化；
-4. 意图切换与 ETDL 扩展；
-5. 灵巧手低维手型扩展；
-6. 仿真接口。
-
----
-
-## 13. Day 1 任务清单
-
-今天只做能够降低后续不确定性的事情。
-
-### 仓库
-
-- [ ] 创建 GitHub 仓库；
-- [ ] 添加本 README；
-- [ ] 创建目录骨架；
-- [ ] 配置 `.gitignore`；
-- [ ] 创建 Python 环境文件；
-- [ ] 确定代码风格、日志和配置方式。
-
-### 接口定义
-
-- [ ] 定义 `RobotObservation`；
-- [ ] 定义 `HumanAction`；
-- [ ] 定义 `AssistAction`；
-- [ ] 定义 `ExecutedAction`；
-- [ ] 定义 `EpisodeMetadata`；
-- [ ] 定义相机和机器人统一时间戳。
-
-### 硬件检查
-
-- [ ] 确认机械臂控制频率；
-- [ ] 确认夹爪目标角度和实际角度接口；
-- [ ] 确认腕部与外部相机分辨率、帧率；
-- [ ] 确认 SpaceMouse 输入频率；
-- [ ] 测试急停和软件限位；
-- [ ] 记录所有设备延迟。
-
-### 第一条可验证链路
+第一条目标链路仍为：
 
 ```text
 SpaceMouse
@@ -602,17 +541,15 @@ SpaceMouse
     → replay / visualization
 ```
 
-今天不要求训练出有效策略，只要求这条链路的接口设计清楚，并尽可能跑通。
-
 ---
 
-## 14. 安全要求
+## 13. 安全要求
 
 真实机器人实验必须满足：
 
 - 设置机械限位和软件工作空间；
 - 限制末端单步位移和速度；
-- 保留物理急停；
+- 真机运动期间控制端软件急停必须常驻可用，操作员必须在场；若增加实体急停，必须采用与实际控制器代际匹配的方案；
 - 夹爪闭合角度和速度受限；
 - 数据采集开始前执行复位检查；
 - 训练策略初次部署使用低速模式；
@@ -622,7 +559,7 @@ SpaceMouse
 
 ---
 
-## 15. 风险与降级方案
+## 14. 风险与降级方案
 
 ### 风险 1：抓取任务不稳定
 
@@ -667,7 +604,7 @@ SpaceMouse
 
 ---
 
-## 16. 最终交付物
+## 15. 最终交付物
 
 项目完成时应至少包含：
 
@@ -686,7 +623,7 @@ SpaceMouse
 
 ---
 
-## 17. 非目标
+## 16. 非目标
 
 在当前 4–6 周周期内，以下内容不属于必做项：
 
@@ -711,7 +648,7 @@ SpaceMouse
 
 ---
 
-## 18. 预期项目结论
+## 17. 预期项目结论
 
 本项目不预设 SharedAutonomy 一定优于 Manual。期望通过可复现实验回答：
 
@@ -725,12 +662,12 @@ SpaceMouse
 
 ---
 
-## 19. License
+## 18. License
 
 待确定。若无实验室或第三方代码限制，建议代码使用 Apache-2.0 或 MIT License；数据集、模型权重和硬件驱动需要分别确认授权条件。
 
 ---
 
-## 20. Citation
+## 19. Citation
 
 项目形成稳定版本后补充引用信息。共享控制模块将注明其与既有人机共享控制研究的关系，外部框架、模型和数据格式按各自许可证与论文要求引用。

@@ -54,7 +54,8 @@ Desktop.ini
 *.local.yaml
 *.local.yml
 *.local.toml
-/configs/local/
+/configs/local/*
+!/configs/local/*.example.yaml
 
 # Logs, temporary files, and crash dumps
 *.log

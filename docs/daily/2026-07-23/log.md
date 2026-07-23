@@ -1,0 +1,136 @@
+# 2026-07-23 工作日志
+
+## 今日计划
+
+参见 [plan.md](plan.md)。
+
+## 完成情况
+
+今天完成了项目设计、关键硬件能力核对、设备延迟基线、数据接口和任务空间安全边界。固定第三视角相机、Cartesian runner 和数据采集闭环按计划留到后续，不影响今日目标完成。
+
+## 实验与结果
+
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| RM-65B UDP 状态反馈 | 约 200 Hz | 第一阶段采用 50 Hz 控制周期有足够状态余量 |
+| RM-65B 只读请求 RTT | 中位数 11.136 ms，P95 20.948 ms | 满足开发期状态读取需要 |
+| MoveJ 首次运动 | 中位数 236.699 ms | 不适合直接连续遥操作 |
+| 低跟随 CAN-FD 首次运动 | 中位数 135.978 ms；SDK 调用中位数 0.188 ms | 可继续用于慢速、局部示教 |
+| 高跟随 CAN-FD | 200 Hz 发送无 deadline violation；实际响应未明显改善 | 当前不因高跟随模式扩大控制复杂度 |
+| SpaceMouse | 原始 report 约 125 Hz，完整 6-DoF 状态约 62.5 Hz | 50 Hz 读取最新状态可行 |
+| SpaceMouse 50 Hz 消费 | state age 中位数 11.765 ms，P95 14.315 ms | 输入新鲜度满足第一阶段需要 |
+| J6-only 联调 | input age P95 15.704 ms，robot state age P95 4.943 ms，无 SDK/callback 错误 | 输入到机械臂的最小真机链路已通过 |
+| D435i | `640×480 @ 30 FPS` 双流稳定 | 复用旧 `stamp` 标定作为当前实机基线 |
+| D435i 50 Hz 消费 | Depth age P95 32.062 ms，Color age P95 41.440 ms | 满足当前视觉输入的软件新鲜度要求 |
+| 软件急停 | 示教器急停可中断低速 J6，解除后不续跑 | 可作为当前已接受剩余风险下的急停方案 |
+| 自动测试 | 46 passed | 今日代码改动通过离线验证 |
+
+## 新结论与决策
+
+- 第一阶段控制频率采用 50 Hz；
+- SpaceMouse 每个控制周期读取最新完整状态，不追逐全部 HID report；
+- 连续遥操作优先使用 CAN-FD 小步控制，不使用 MoveJ；
+- 当前约 135 ms 的首次物理响应可用于慢速、局部共享控制，完整主观手感仍待 Cartesian 链路验收；
+- SDK 返回的是 Base 坐标系下的法兰位姿；
+- 第一阶段保持夹爪竖直向下；
+- 法兰到夹爪尖端的偏移为 178 mm，只补偿一次；
+- XY 安全区域采用四点凸四边形：
+  `(-456, 107)`、`(-387, -236)`、`(-170, -420)`、`(-150, 68)` mm；
+- 用户确认最低法兰高度设为 `Z=178 mm`，不增加额外净空，以免影响抓取；
+- 控制器和关节限位承担底层保护，项目软件额外负责环境工作区、桌面、速度、姿态和输入超时；
+- 没有外置实体急停的剩余风险已明确接受，不再作为当前开发前置条件。
+
+## 今日理解重点（15–30 分钟）
+
+### 1. 为什么要分别记录三种动作
+
+- **一句话**：`HumanAction` 是人想怎么动，`AssistAction` 是辅助器建议怎么修正，`ExecutedAction` 是安全过滤后真正发送给机器人的动作。
+- **为什么重要**：如果只保存最终动作，就无法分析操作者贡献、辅助强度、人机冲突，也无法公平比较 Manual 与 SharedAutonomy 数据。
+- **本项目怎么做**：三种动作使用独立接口，但共享同一控制步语义；`ExecutedAction` 还要记录安全过滤结果。
+- **代码入口**：[`../../../sharedautonomy/data/schema.py`](../../../sharedautonomy/data/schema.py) 和 [`../../decisions/0001-runtime-data-interfaces.md`](../../decisions/0001-runtime-data-interfaces.md)。
+- **自测问题**：为什么不能用 `ExecutedAction - HumanAction` 代替显式记录 `AssistAction`？
+
+### 2. 统一时间戳不是强行统一设备时钟
+
+- **一句话**：相机、SpaceMouse 和机器人保留各自设备时间，同时用主机 `monotonic_ns` 记录接收时刻并完成跨设备对齐。
+- **为什么重要**：UTC 可能被系统校时调整，设备 timestamp 也可能属于不同 clock domain；控制循环需要不会回跳的单调时钟。
+- **本项目怎么做**：UTC 用于审计，设备 timestamp 用于保留来源信息，主机 monotonic 时间用于调度、新鲜度检查和对齐。
+- **代码入口**：[`../../../sharedautonomy/data/schema.py`](../../../sharedautonomy/data/schema.py) 中的 `SampleTimestamp`。
+- **自测问题**：为什么不能直接比较 D435i timestamp 和 SpaceMouse timestamp 来计算两者延迟？
+
+### 3. 135 ms 延迟到底代表什么
+
+- **一句话**：约 135 ms 是 CAN-FD 命令发出到 UDP 状态中首次检测到机械臂运动的时间，不是移动到目标位置所需的总时间。
+- **为什么重要**：SDK 函数很快返回不代表机械臂已经响应；“开始运动”和“到达目标”也是两个不同指标。
+- **本项目怎么做**：分别记录 SDK 调用耗时、首次运动、到达阈值和稳定时间，当前只据首次运动判断慢速遥操作可行性。
+- **代码入口**：[`../../hardware_setup.md`](../../hardware_setup.md) 和 `scripts/test_rm65_command_response.py`。
+- **自测问题**：为什么 SDK 调用只有约 0.188 ms，但操作者仍可能感到约 135 ms 的响应延迟？
+
+### 4. 为什么安全过滤既要看法兰，也要看夹爪尖端
+
+- **一句话**：SDK 返回法兰位姿，但真正可能碰桌面的是距法兰 178 mm 的夹爪尖端。
+- **为什么重要**：只限制法兰 Z 会忽略工具长度；重复补偿 178 mm 又会导致目标位置错误。
+- **本项目怎么做**：固定夹爪竖直向下时使用 Base 坐标系偏移 `[0, 0, -0.178] m`，最低法兰 Z 设为 0.178 m，并对夹爪尖端 XY 检查四点凸多边形。
+- **代码入口**：[`../../../sharedautonomy/robot/safety.py`](../../../sharedautonomy/robot/safety.py) 中的 `CartesianWorkspace` 和 `validate_cartesian_segment`。
+- **自测问题**：如果以后允许夹爪旋转，为什么不能继续固定使用 `[0, 0, -0.178]` 这个 Base 坐标系偏移？
+
+### 5. 为什么限速必须使用真实 dt
+
+- **一句话**：每周期最大位移只有在周期完全稳定时才等价于速度限制，严格限速必须使用 `速度 = 位移 / 实际 dt`。
+- **为什么重要**：控制循环发生抖动或漏周期时，固定步长不能准确表达速度和加速度，也不能形成可解释的安全界限。
+- **本项目怎么做**：`limit_cartesian_target` 根据实际 `dt_s` 限制速度，并可结合上一周期执行速度限制加速度。
+- **代码入口**：[`../../../sharedautonomy/robot/safety.py`](../../../sharedautonomy/robot/safety.py) 中的 `limit_cartesian_target`。
+- **自测问题**：同样是每周期最多移动 1 mm，在 50 Hz 和 10 Hz 下分别相当于多大速度？
+
+### 面试式自测
+
+1. `HumanAction`、`AssistAction` 和 `ExecutedAction` 为什么必须分开？
+   - 参考要点：意图、辅助建议、实际执行；归因；冲突；数据分析。
+2. 设备同步为什么选主机 monotonic 时间，而不是只用 UTC？
+   - 参考要点：单调、不回跳、clock domain、设备时间保留。
+3. CAN-FD 的低 SDK 调用耗时为什么不等于低物理响应延迟？
+   - 参考要点：异步下发、控制器缓冲、首次运动反馈。
+4. 当前桌面安全约束如何考虑夹爪长度？
+   - 参考要点：法兰位姿、178 mm 偏移、固定竖直、只补偿一次。
+5. 当前安全过滤还差哪一步才能保护实际 Cartesian 遥操作？
+   - 参考要点：接入 runner；必须位于每次 SDK 调用之前；参数定稿和 dry-run。
+
+## 代码与文档变更
+
+- 定义运行时数据接口和统一时间戳：[`../../decisions/0001-runtime-data-interfaces.md`](../../decisions/0001-runtime-data-interfaces.md)；
+- 增加 RM-65B、夹爪和安全过滤实现；
+- 增加 SpaceMouse、D435i 和 RM-65B 的诊断及延迟测试脚本；
+- 增加任务空间、速度/加速度、固定姿态和输入新鲜度纯函数；
+- 更新硬件结论：[`../../hardware_setup.md`](../../hardware_setup.md)；
+- 建立项目路线图和每日计划/日志结构；
+- 将文档分层、每日维护、收尾和“今日理解重点”规则固化到仓库根目录 `AGENTS.md`，后续 Agent 无需用户重复提醒。
+
+## 验证
+
+- 全量测试：`46 passed`；
+- Ruff lint：通过；
+- Ruff format check：通过；
+- 已执行的真机测试仅限用户明确确认后的低速、小范围测试；
+- 本次文档整理未连接或移动真机。
+
+## 未完成与阻塞
+
+- Cartesian 安全过滤已经实现为纯函数，但尚未接入实际 SpaceMouse/Cartesian runner；
+- 最大法兰 Z、最大线速度、最大线加速度、固定姿态容差和输入超时尚未定稿；
+- episode recorder、回放和可视化尚未形成完整链路；
+- 固定第三视角 RGB 相机尚未购买；
+- 夹爪严格端到端物理延迟和相机严格光学延迟需要外部测量基准，目前不是项目推进前置条件。
+
+## 已沉淀到长期文档
+
+- 硬件配置、频率、延迟与安全结论 → [`../../hardware_setup.md`](../../hardware_setup.md)；
+- 数据接口与时间戳决策 → [`../../decisions/0001-runtime-data-interfaces.md`](../../decisions/0001-runtime-data-interfaces.md)；
+- 阶段进度和后续里程碑 → [`../../roadmap.md`](../../roadmap.md)。
+
+## 下一工作日建议
+
+1. 定义并实现 Cartesian/SpaceMouse runner；
+2. 按“输入新鲜度 → 真实 `dt` 限幅 → 固定姿态 → 工作空间 → IK → 关节过滤”的顺序接入安全链；
+3. 确定最大法兰 Z、线速度、线加速度、姿态容差和输入超时的初始保守值；
+4. 先完成 mock 和 dry-run，再决定是否进行极小范围 XYZ 真机验收；
+5. 安全链通过后，开始 episode recorder、同步观测和回放骨架。

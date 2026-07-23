@@ -1,0 +1,13 @@
+id: rm65
+ip: 192.168.1.19
+port: 8080
+
+# Connection is read-only by default. Do not enable motion until the official
+# joint limits, workspace bounds, emergency stop, and low-speed checks pass.
+set_run_mode_on_connect: false
+enable_motion: false
+joint_limits_deg: null
+max_relative_target_deg: 1.0
+
+use_controller_gripper: false
+cameras: {}

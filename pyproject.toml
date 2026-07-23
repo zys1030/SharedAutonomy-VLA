@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sharedautonomy-vla"
+version = "0.1.0"
+description = "Shared-autonomy-assisted demonstration collection and corrective VLA fine-tuning for real-robot manipulation."
+readme = "README.md"
+keywords = [
+    "robotics",
+    "shared-autonomy",
+    "imitation-learning",
+    "vision-language-action",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3",
+]
+
+# Python and runtime dependency constraints will be added after the
+# LeRobot, robot SDK, camera, and SpaceMouse compatibility smoke tests.
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[project.urls]
+Repository = "https://github.com/zys1030/SharedAutonomy-VLA"
+Issues = "https://github.com/zys1030/SharedAutonomy-VLA/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sharedautonomy*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "-ra",
+    "--strict-config",
+    "--strict-markers",
+]
+
+[tool.ruff]
+line-length = 110
+src = ["sharedautonomy", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "B",
+    "UP",
+]
+
+[tool.ruff.format]
+docstring-code-format = true

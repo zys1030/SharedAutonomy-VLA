@@ -1,4 +1,4 @@
-# SharedAssist-VLA
+# SharedAutonomy-VLA
 
 > 面向真实机器人操作的共享控制辅助示教、模仿学习与 VLA 纠错微调闭环  
 > Shared-Autonomy-Assisted Demonstration Collection and Corrective VLA Fine-Tuning for Real-Robot Manipulation
@@ -186,7 +186,7 @@ a_executed = a_human
 - 验证硬件与数据同步；
 - 量化共享控制是否提高采集质量。
 
-### 6.2 SharedAssist
+### 6.2 SharedAutonomy
 
 共享控制辅助采集：
 
@@ -238,7 +238,7 @@ task_text: "Pick up the red block and place it in the left region."
 source_object: red
 destination: left
 success: true
-collection_mode: manual | shared_assist | corrective
+collection_mode: manual | shared_autonomy | corrective
 ```
 
 ### 7.2 观测
@@ -304,12 +304,12 @@ destination_id ∈ {left, right}
 计划训练：
 
 - `ACT-Manual`
-- `ACT-SharedAssist`
+- `ACT-SharedAutonomy`
 
 ACT 的主要作用：
 
 - 快速验证数据、动作和时间同步；
-- 比较 Manual 与 SharedAssist 数据质量；
+- 比较 Manual 与 SharedAutonomy 数据质量；
 - 作为稳定、低成本的模仿学习基线；
 - 在 VLA 训练失败时保证项目仍有完整成果。
 
@@ -331,8 +331,8 @@ action chunk
 计划训练：
 
 - `VLA-Manual`
-- `VLA-SharedAssist`
-- `VLA-SharedAssist-Corrective`
+- `VLA-SharedAutonomy`
+- `VLA-SharedAutonomy-Corrective`
 
 当前优先考虑能够在单张 24 GB 显卡上完成微调的小型 VLA。具体模型和版本在完成训练 smoke test 后确定。
 
@@ -342,7 +342,7 @@ action chunk
 
 ### RQ1：共享控制是否提高示教采集效率？
 
-比较 Manual 和 SharedAssist：
+比较 Manual 和 SharedAutonomy：
 
 - 单位时间内成功演示数量；
 - 原始 episode 成功率；
@@ -356,8 +356,8 @@ action chunk
 
 在相同成功演示数量下比较：
 
-- ACT-Manual vs. ACT-SharedAssist；
-- VLA-Manual vs. VLA-SharedAssist。
+- ACT-Manual vs. ACT-SharedAutonomy；
+- VLA-Manual vs. VLA-SharedAutonomy。
 
 主要指标：
 
@@ -372,8 +372,8 @@ action chunk
 
 比较：
 
-- `VLA-SharedAssist`
-- `VLA-SharedAssist-Corrective`
+- `VLA-SharedAutonomy`
+- `VLA-SharedAutonomy-Corrective`
 
 主要指标：
 
@@ -409,7 +409,7 @@ ACT 获得结构化任务条件，VLA 获得自然语言指令。重点分析：
 
 ### 10.3 公平性原则
 
-- Manual 与 SharedAssist 使用相同任务分布；
+- Manual 与 SharedAutonomy 使用相同任务分布；
 - 相同数据量和相同采集时间分别比较；
 - 测试场景和随机种子保持一致；
 - 明确区分成功演示、失败演示和纠错演示；
@@ -421,7 +421,7 @@ ACT 获得结构化任务条件，VLA 获得自然语言指令。重点分析：
 ## 11. 仓库结构
 
 ```text
-sharedassist-vla/
+sharedautonomy-vla/
 ├── README.md
 ├── LICENSE
 ├── pyproject.toml
@@ -430,7 +430,7 @@ sharedassist-vla/
 │   ├── collection/
 │   ├── policy/
 │   └── evaluation/
-├── sharedassist/
+├── sharedautonomy/
 │   ├── robot/
 │   │   ├── rm65.py
 │   │   ├── gripper.py
@@ -451,7 +451,7 @@ sharedassist-vla/
 │   │   └── authority.py
 │   ├── control/
 │   │   ├── manual.py
-│   │   ├── shared_assist.py
+│   │   ├── shared_autonomy.py
 │   │   └── intervention.py
 │   ├── data/
 │   │   ├── recorder.py
@@ -506,7 +506,7 @@ sharedassist-vla/
 
 > 一条命令开始采集，一条命令检查数据，一条命令启动最小训练。
 
-### Week 2：SharedAssist 采集器
+### Week 2：SharedAutonomy 采集器
 
 - [ ] 目标检测和工作空间标定；
 - [ ] 候选目标意图推理；
@@ -517,15 +517,15 @@ sharedassist-vla/
 
 验收标准：
 
-> Manual 和 SharedAssist 均可稳定完成 reaching，并开始抓取放置。
+> Manual 和 SharedAutonomy 均可稳定完成 reaching，并开始抓取放置。
 
 ### Week 3：正式数据与 ACT
 
 - [ ] Manual 数据集；
-- [ ] SharedAssist 数据集；
+- [ ] SharedAutonomy 数据集；
 - [ ] 数据清洗和质量统计；
 - [ ] ACT-Manual；
-- [ ] ACT-SharedAssist；
+- [ ] ACT-SharedAutonomy；
 - [ ] 真机 rollout 与第一版结果。
 
 ### Week 4：小型 VLA
@@ -533,7 +533,7 @@ sharedassist-vla/
 - [ ] 语言任务字段；
 - [ ] VLA LoRA smoke test；
 - [ ] VLA-Manual；
-- [ ] VLA-SharedAssist；
+- [ ] VLA-SharedAutonomy；
 - [ ] 真机推理；
 - [ ] 初步泛化测试；
 - [ ] 发布可展示的 GitHub MVP。
@@ -674,7 +674,7 @@ SpaceMouse
 - 可公开 GitHub 仓库；
 - 清晰 README 和系统架构图；
 - RM-65B/SpaceMouse/双相机数据采集接口；
-- Manual 与 SharedAssist 数据集示例；
+- Manual 与 SharedAutonomy 数据集示例；
 - 数据检查和可视化工具；
 - ACT 训练与部署脚本；
 - 小型 VLA 微调与部署脚本；
@@ -713,7 +713,7 @@ SpaceMouse
 
 ## 18. 预期项目结论
 
-本项目不预设 SharedAssist 一定优于 Manual。期望通过可复现实验回答：
+本项目不预设 SharedAutonomy 一定优于 Manual。期望通过可复现实验回答：
 
 1. 共享控制是否在相同采集时间下产生更多成功演示？
 2. 共享控制生成的轨迹是否更平滑、更安全或更容易学习？

@@ -8,21 +8,21 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Runtime outputs and datasets
-data/
-datasets/
-recordings/
-outputs/
-runs/
-checkpoints/
-weights/
-models/
-wandb/
-mlruns/
-captures/
+# Runtime outputs and datasets (repo-root only; do not ignore sharedautonomy/data/)
+/data/
+/datasets/
+/recordings/
+/outputs/
+/runs/
+/checkpoints/
+/weights/
+/models/
+/wandb/
+/mlruns/
+/captures/
 
 # Machine-local configuration
-configs/local/
+/configs/local/
 
 # Hardware diagnostic scripts (manual execution; not part of library code)
 scripts/test_*.py

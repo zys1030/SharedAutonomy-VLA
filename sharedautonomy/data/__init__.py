@@ -12,6 +12,17 @@ from .schema import (
     RobotObservation,
     SampleTimestamp,
 )
+from .sync import (
+    ObservationSyncConfig,
+    ObservationSyncError,
+    ObservationSynchronizer,
+    ProprioceptiveSample,
+    StaticCameraSource,
+    StaticProprioceptiveSource,
+    SyncedObservation,
+    proprioceptive_sample_from_cartesian,
+    rpy_rad_to_quaternion_xyzw,
+)
 
 __all__ = [
     "SCHEMA_VERSION",
@@ -22,6 +33,15 @@ __all__ = [
     "EpisodeMetadata",
     "ExecutedAction",
     "HumanAction",
+    "ObservationSyncConfig",
+    "ObservationSyncError",
+    "ObservationSynchronizer",
+    "ProprioceptiveSample",
     "RobotObservation",
     "SampleTimestamp",
+    "StaticCameraSource",
+    "StaticProprioceptiveSource",
+    "SyncedObservation",
+    "proprioceptive_sample_from_cartesian",
+    "rpy_rad_to_quaternion_xyzw",
 ]

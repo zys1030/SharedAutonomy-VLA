@@ -1,6 +1,9 @@
 import math
 
 import pytest
+
+pytestmark = pytest.mark.core
+
 from sharedautonomy.robot.safety import (
     CartesianSafetyError,
     CartesianWorkspace,

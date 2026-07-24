@@ -2,6 +2,8 @@ from types import SimpleNamespace
 
 import pytest
 
+pytestmark = pytest.mark.core
+
 pytest.importorskip("lerobot")
 
 from sharedautonomy.robot.rm65 import JOINT_KEYS, RM65, RM65Config

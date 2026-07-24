@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import pytest
+
+pytestmark = pytest.mark.core
+
 from sharedautonomy.devices.spacemouse import (
     HidSpaceMouse,
     SpaceMouseConfig,

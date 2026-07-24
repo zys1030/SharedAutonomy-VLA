@@ -50,6 +50,10 @@ addopts = [
     "--strict-config",
     "--strict-markers",
 ]
+markers = [
+    "core: safety-critical paths; default for day-to-day and AI-assisted changes",
+    "extended: schema and adapter coverage; run before hardware sessions or release",
+]
 
 [tool.ruff]
 line-length = 110

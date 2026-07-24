@@ -5,6 +5,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+
+pytestmark = pytest.mark.core
+
 from sharedautonomy.control.realtime import RealtimeCartesianStateSource
 from sharedautonomy.robot.realtime_state import (
     RealManRealtimeStateSource,

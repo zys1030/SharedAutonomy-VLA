@@ -24,6 +24,9 @@
 
 - 修复格式问题时可以使用 `python -m ruff format`；不做无关的全仓格式化。
 - 使用 pytest 验证行为。硬件不可用时，应优先覆盖纯函数、mock 和配置解析路径。
+- 测试分两层：`core`（安全与 teleop 关键路径，日常默认）和 `extended`（schema、夹爪等）。日常与 AI 辅助改动默认 `pytest -m core`；全量在真机联调前或收尾时运行。
+- 不为 `scripts/` 本地辅助函数写单元测试；详见 `AGENTS.md` 测试策略与 AI 协作约定。
+- 项目背景与架构见 `docs/overview.md`；README 仅作导航入口。
 
 ### 编写规则
 
@@ -108,7 +111,7 @@ configs/
 
 ## 文档与决策边界
 
-- `README.md` 是项目入口、目标和高层架构，不堆叠临时运行记录。
+- `README.md` 是项目导航入口；长期背景与架构见 `docs/overview.md`，不堆叠临时运行记录。
 - `AGENTS.md` 只保存 AI coding agent 必须遵守的短规则。
 - 本文保存稳定的工程约定。
 - `docs/hardware_setup.md`、`docs/dataset.md` 和 `docs/experiments.md` 分别在硬件参数、数据 schema 和正式实验协议确定后创建；当前不创建空文件。

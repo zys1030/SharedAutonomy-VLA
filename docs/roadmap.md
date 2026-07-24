@@ -1,6 +1,6 @@
 # 项目路线图
 
-本文档维护 SharedAutonomy-VLA 的阶段目标、当前进度和验收标准。具体的每日执行项与工作记录分别保存在 [`daily/`](daily/) 下的 `plan.md` 和 `log.md` 中。
+本文档维护 SharedAutonomy-VLA 的阶段目标、当前进度和验收标准。项目背景见 [`overview.md`](overview.md)；具体的每日执行项与工作记录分别保存在 [`daily/`](daily/) 下的 `plan.md` 和 `log.md` 中。
 
 ## 当前状态
 

@@ -2,6 +2,9 @@ from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import pytest
+
+pytestmark = pytest.mark.extended
+
 from sharedautonomy.data import (
     AssistAction,
     CameraFrame,

@@ -1,5 +1,7 @@
 import pytest
 
+pytestmark = pytest.mark.extended
+
 from sharedautonomy.robot.gripper import (
     GripperDirection,
     RealManControllerGripper,

@@ -5,6 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.core
+
 from sharedautonomy.assistance.workspace_config import load_cartesian_workspace, workspace_from_mapping
 from sharedautonomy.control.motion_gate import resolve_motion_enabled
 from sharedautonomy.robot.canfd_commander import RealManCanfdJointCommander

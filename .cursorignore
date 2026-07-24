@@ -1,0 +1,43 @@
+﻿# Python caches and tool artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+.coverage
+htmlcov/
+
+# Runtime outputs and datasets
+data/
+datasets/
+recordings/
+outputs/
+runs/
+checkpoints/
+weights/
+models/
+wandb/
+mlruns/
+captures/
+
+# Machine-local configuration
+configs/local/
+
+# Hardware diagnostic scripts (manual execution; not part of library code)
+scripts/test_*.py
+scripts/check_*.py
+
+# Large binaries and recordings
+*.bag
+*.db3
+*.mcap
+*.h5
+*.hdf5
+*.parquet
+*.arrow
+*.pt
+*.pth
+*.safetensors
+*.ckpt
+*.onnx

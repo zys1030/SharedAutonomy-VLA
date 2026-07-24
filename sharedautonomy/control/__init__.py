@@ -13,10 +13,19 @@ from sharedautonomy.control.manual import (
     passthrough_safety_pipeline,
 )
 from sharedautonomy.control.motion_gate import resolve_motion_enabled
+from sharedautonomy.control.observation import (
+    CameraRuntimeConfig,
+    CartesianProprioceptiveSource,
+    build_camera_session_from_config,
+    build_observation_synchronizer,
+    load_camera_runtime_config,
+)
 from sharedautonomy.control.realtime import RealtimeCartesianStateSource
 
 __all__ = [
+    "CameraRuntimeConfig",
     "CartesianControlStep",
+    "CartesianProprioceptiveSource",
     "CartesianRobotState",
     "ManualCartesianConfig",
     "ManualCartesianRunner",
@@ -24,8 +33,11 @@ __all__ = [
     "MockJointCommander",
     "MockRobotStateSource",
     "RealtimeCartesianStateSource",
+    "build_camera_session_from_config",
     "build_manual_cartesian_runner",
+    "build_observation_synchronizer",
     "integrate_cartesian_velocity",
+    "load_camera_runtime_config",
     "passthrough_safety_pipeline",
     "resolve_motion_enabled",
 ]

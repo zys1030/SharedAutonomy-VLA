@@ -20,6 +20,12 @@ from sharedautonomy.control.manual import (
     build_manual_cartesian_runner,
 )
 from sharedautonomy.control.motion_gate import resolve_motion_enabled
+from sharedautonomy.control.observation import (
+    CartesianProprioceptiveSource,
+    build_camera_session_from_config,
+    build_observation_synchronizer,
+    load_camera_runtime_config,
+)
 from sharedautonomy.control.realtime import RealtimeCartesianStateSource
 from sharedautonomy.devices.spacemouse import HidSpaceMouse, SpaceMouseConfig
 from sharedautonomy.robot.canfd_commander import RealManCanfdJointCommander
@@ -109,6 +115,11 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=50,
         help="rm_movej_canfd radio/smoothing when motion is enabled (try_sc uses 50)",
+    )
+    parser.add_argument(
+        "--enable-cameras",
+        action="store_true",
+        help="Start wrist RealSense + external UVC cameras and attach synced observations",
     )
     return parser.parse_args()
 
@@ -220,6 +231,18 @@ def main() -> int:
     backend = RealManRealtimeStateSource(ip=args.ip, port=args.port)
     teleop.connect()
     backend.connect()
+    camera_session = None
+    observation_synchronizer = None
+    if args.enable_cameras:
+        camera_runtime = load_camera_runtime_config()
+        camera_session, sync_config = build_camera_session_from_config(camera_runtime)
+        camera_session.start()
+        proprio_source = CartesianProprioceptiveSource(RealtimeCartesianStateSource(backend))
+        observation_synchronizer = build_observation_synchronizer(
+            proprioception=proprio_source,
+            camera_session=camera_session,
+            sync_config=sync_config,
+        )
     commander: MockJointCommander | RealManCanfdJointCommander
     if motion_enabled:
         commander = RealManCanfdJointCommander(
@@ -278,6 +301,7 @@ def main() -> int:
             safety_filter=safety,
             inverse_kinematics=inverse_kinematics,
             joint_commander=commander,
+            observation_synchronizer=observation_synchronizer,
         )
 
         print(
@@ -297,6 +321,7 @@ def main() -> int:
                     "planned_steps": total_steps,
                     "control_hz": control_hz,
                     "enable_motion": motion_enabled,
+                    "enable_cameras": bool(args.enable_cameras),
                     "move_increment_mm": round(float(move_increment_m) * 1000.0, 3),
                     "max_linear_speed_mm_s": round(max_speed_m_s * 1000.0, 3),
                     "max_linear_speed_source": speed_source,
@@ -335,23 +360,23 @@ def main() -> int:
             steps.append(step)
             elapsed_s = (time.perf_counter_ns() - started_ns) / 1_000_000_000
             if elapsed_s >= next_progress_s:
-                print(
-                    json.dumps(
-                        {
-                            "progress_s": round(elapsed_s, 1),
-                            "steps_done": index + 1,
-                            "deadman_active": step.human_action.deadman_active,
-                            "motion_sent": step.motion_sent,
-                            "command_mm_s": [
-                                round(value * 1000.0, 2)
-                                for value in step.human_action.linear_velocity_m_s
-                            ],
-                            "requested_z_mm": round(float(step.requested_ee_position_m[2]) * 1000.0, 2),
-                            "ee_z_mm": round(float(step.robot_state.ee_position_m[2]) * 1000.0, 2),
-                        }
-                    ),
-                    flush=True,
-                )
+                progress_payload = {
+                    "progress_s": round(elapsed_s, 1),
+                    "steps_done": index + 1,
+                    "deadman_active": step.human_action.deadman_active,
+                    "motion_sent": step.motion_sent,
+                    "command_mm_s": [
+                        round(value * 1000.0, 2)
+                        for value in step.human_action.linear_velocity_m_s
+                    ],
+                    "requested_z_mm": round(float(step.requested_ee_position_m[2]) * 1000.0, 2),
+                    "ee_z_mm": round(float(step.robot_state.ee_position_m[2]) * 1000.0, 2),
+                }
+                if step.synced_observation is not None:
+                    progress_payload["wrist_camera_age_ms"] = step.synced_observation.wrist_age_ms
+                    progress_payload["external_camera_age_ms"] = step.synced_observation.external_age_ms
+                    progress_payload["sync_warnings"] = list(step.synced_observation.warnings)
+                print(json.dumps(progress_payload), flush=True)
                 next_progress_s += 5.0
             if index + 1 < total_steps:
                 time.sleep(period_s)
@@ -376,6 +401,7 @@ def main() -> int:
             "status": "aborted" if abort_reason else "ok",
             "abort_reason": abort_reason,
             "enable_motion": motion_enabled,
+            "enable_cameras": bool(args.enable_cameras),
             "teleop": "hid_spacemouse",
             "workspace_source": workspace_source,
             "motion_config_source": config_source,
@@ -403,8 +429,40 @@ def main() -> int:
                 {reason for step in steps for reason in step.executed_action.safety_reasons}
             ),
         }
+        if last.synced_observation is not None:
+            summary["wrist_camera_present_steps"] = sum(
+                1
+                for step in steps
+                if step.synced_observation is not None
+                and step.synced_observation.observation.wrist_camera is not None
+            )
+            summary["external_camera_present_steps"] = sum(
+                1
+                for step in steps
+                if step.synced_observation is not None
+                and step.synced_observation.observation.external_camera is not None
+            )
+            summary["sync_warning_counts"] = {
+                warning: sum(
+                    1
+                    for step in steps
+                    if step.synced_observation is not None and warning in step.synced_observation.warnings
+                )
+                for warning in sorted(
+                    {
+                        warning
+                        for step in steps
+                        if step.synced_observation is not None
+                        for warning in step.synced_observation.warnings
+                    }
+                )
+            }
+            summary["last_wrist_camera_age_ms"] = last.synced_observation.wrist_age_ms
+            summary["last_external_camera_age_ms"] = last.synced_observation.external_age_ms
         print(json.dumps(summary, indent=2), flush=True)
     finally:
+        if camera_session is not None:
+            camera_session.stop()
         if isinstance(commander, RealManCanfdJointCommander) and commander.commands_sent > 0:
             try:
                 slow_stop_status = commander.slow_stop()

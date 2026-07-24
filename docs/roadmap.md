@@ -5,21 +5,21 @@
 ## 当前状态
 
 - 当前阶段：**Week 1：硬件、数据与最小训练闭环**
-- 最近完成的每日计划：[2026-07-23 plan](daily/2026-07-23/plan.md)
-- 当前每日计划：[2026-07-24 plan](daily/2026-07-24/plan.md)
-- 最近工作日志：[2026-07-23 log](daily/2026-07-23/log.md)
-- 下一步主线：episode recorder / 采集 runner（默认 **10 Hz** `collection_teleop`；50 Hz 非训练硬需求）
+- 最近完成的每日计划：[2026-07-24 plan](daily/2026-07-24/plan.md)
+- 当前每日计划：待创建下一工作日 `plan.md`
+- 最近工作日志：[2026-07-24 log](daily/2026-07-24/log.md)
+- 下一步主线：**采集闭环**（`EpisodeRecorder` 接入 teleop + 首条短 episode 落盘/加载验证；默认 **10 Hz** `collection_teleop`）
 
 ## Week 1：硬件、数据与最小训练闭环
 
 - [x] 创建仓库和目录骨架；
-- [ ] 接入 RM-65B、夹爪、SpaceMouse、腕部 RGB-D 与固定第三视角 RGB 相机；
-  - RM-65B、夹爪、SpaceMouse 和腕部 D435i 已完成首轮接入与检查；
-  - 固定第三视角相机尚未购买；
+- [x] 接入 RM-65B、夹爪、SpaceMouse、腕部 RGB-D 与固定第三视角 RGB 相机；
+  - 硬件连通与软件双相机 observation 接线已完成（2026-07-24）；
+  - 第三视角支架安装与正式采集 FOV 仍待后续；
 - [x] 确定统一坐标系和第一阶段动作表示；
 - [ ] 完成运行时跨设备时间同步；
-  - 统一时间戳接口已定义；
-  - 尚需接入实际采集 runner；
+  - 统一时间戳接口、`ObservationSynchronizer` 与双相机 `CameraSource` 已落地；
+  - 尚需接入正式采集 runner 并长期稳定 running；
 - [ ] 采集并回放 10 条人工轨迹；
 - [ ] 建立数据校验和可视化工具；
 - [ ] 用小数据完成 ACT/VLA smoke test。

@@ -1,0 +1,20 @@
+# Copy to external_rgb.local.yaml and keep the copy untracked.
+camera:
+  type: uvc_rgb
+  role: external
+  model: null
+  # Prefer matching by USB identity / friendly name. OpenCV indices are unstable.
+  vendor_id: null
+  product_id: null
+  friendly_name: null
+  windows_instance_id: null
+  opencv_index_hint: null
+  opencv_backend: dshow
+  width: 640
+  height: 480
+  fps: 30
+  color_format: bgr8
+  warmup_frames: 60
+
+# Device identity, USB topology notes, and as-of enumeration dates belong in the
+# untracked local file. Do not commit camera serial numbers or machine paths.

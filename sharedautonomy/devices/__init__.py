@@ -1,5 +1,12 @@
 """Teleoperation devices and camera interfaces."""
 
+from sharedautonomy.devices.cameras import (
+    CameraSession,
+    MockRgbCamera,
+    MockRgbdCamera,
+    RealSenseRgbdCamera,
+    UvcRgbCamera,
+)
 from sharedautonomy.devices.spacemouse import (
     HidSpaceMouse,
     MockSpaceMouse,
@@ -18,11 +25,16 @@ from sharedautonomy.devices.spacemouse import (
 )
 
 __all__ = [
+    "CameraSession",
     "HidSpaceMouse",
+    "MockRgbCamera",
+    "MockRgbdCamera",
     "MockSpaceMouse",
+    "RealSenseRgbdCamera",
     "SpaceMouseAxes",
     "SpaceMouseConfig",
     "SpaceMouseDevice",
+    "UvcRgbCamera",
     "apply_deadzone",
     "apply_transform",
     "decode_int16_le",

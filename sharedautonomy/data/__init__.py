@@ -1,5 +1,13 @@
 """Dataset schemas, recording, validation, and visualization."""
 
+from .recorder import (
+    EPISODE_FORMAT,
+    EpisodeRecorder,
+    EpisodeRecorderError,
+    EpisodeStep,
+    RecordedEpisode,
+    load_recorded_episode,
+)
 from .schema import (
     SCHEMA_VERSION,
     AssistAction,
@@ -25,23 +33,29 @@ from .sync import (
 )
 
 __all__ = [
+    "EPISODE_FORMAT",
     "SCHEMA_VERSION",
     "AssistAction",
     "CameraFrame",
     "CollectionMode",
     "CoordinateFrame",
     "EpisodeMetadata",
+    "EpisodeRecorder",
+    "EpisodeRecorderError",
+    "EpisodeStep",
     "ExecutedAction",
     "HumanAction",
     "ObservationSyncConfig",
     "ObservationSyncError",
     "ObservationSynchronizer",
     "ProprioceptiveSample",
+    "RecordedEpisode",
     "RobotObservation",
     "SampleTimestamp",
     "StaticCameraSource",
     "StaticProprioceptiveSource",
     "SyncedObservation",
+    "load_recorded_episode",
     "proprioceptive_sample_from_cartesian",
     "rpy_rad_to_quaternion_xyzw",
 ]

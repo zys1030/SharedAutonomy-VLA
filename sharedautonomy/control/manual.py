@@ -21,6 +21,7 @@ from sharedautonomy.data.schema import (
     HumanAction,
     SampleTimestamp,
 )
+from sharedautonomy.data.sync import ObservationSynchronizer, SyncedObservation
 from sharedautonomy.robot.kinematics import InverseKinematicsError
 from sharedautonomy.robot.safety import MotionDisabledError, clip_joint_targets
 
@@ -89,6 +90,7 @@ class CartesianControlStep:
     actual_dt_s: float
     executed_action: ExecutedAction
     motion_sent: bool
+    synced_observation: SyncedObservation | None = None
 
 
 class TeleopSource(Protocol):
@@ -242,6 +244,7 @@ class ManualCartesianRunner:
     safety_pipeline: SafetyPipeline
     inverse_kinematics: InverseKinematics = field(default_factory=MockInverseKinematics)
     joint_commander: JointCommander | None = None
+    observation_synchronizer: ObservationSynchronizer | None = None
     _step_index: int = field(default=0, init=False, repr=False)
     _last_tick_monotonic_ns: int | None = field(default=None, init=False, repr=False)
 
@@ -289,6 +292,18 @@ class ManualCartesianRunner:
             )
 
         robot_state = self.robot_state_source.read_cartesian_state(now_monotonic_ns=now_ns)
+        synced_observation = None
+        if self.observation_synchronizer is not None:
+            proprio_source = self.observation_synchronizer.proprioception
+            set_from_cartesian = getattr(proprio_source, "set_from_cartesian_state", None)
+            if callable(set_from_cartesian):
+                set_from_cartesian(robot_state)
+            else:
+                proprio_source.read_proprioception(now_monotonic_ns=now_ns)
+            synced_observation = self.observation_synchronizer.capture(
+                now_monotonic_ns=now_ns,
+                timestamp_utc=stamp,
+            )
         requested_position = integrate_cartesian_velocity(
             robot_state.ee_position_m,
             human_action.linear_velocity_m_s,
@@ -397,6 +412,7 @@ class ManualCartesianRunner:
             actual_dt_s=actual_dt_s,
             executed_action=executed,
             motion_sent=motion_sent,
+            synced_observation=synced_observation,
         )
         self._step_index += 1
         self._last_tick_monotonic_ns = now_ns
@@ -429,6 +445,7 @@ def build_manual_cartesian_runner(
     safety_filter: CartesianSafetyFilter,
     inverse_kinematics: InverseKinematics | None = None,
     joint_commander: JointCommander | None = None,
+    observation_synchronizer: ObservationSynchronizer | None = None,
 ) -> ManualCartesianRunner:
     """Construct a runner with the Cartesian safety filter already attached."""
     return ManualCartesianRunner(
@@ -438,4 +455,5 @@ def build_manual_cartesian_runner(
         safety_pipeline=safety_filter,
         inverse_kinematics=inverse_kinematics or MockInverseKinematics(),
         joint_commander=joint_commander,
+        observation_synchronizer=observation_synchronizer,
     )

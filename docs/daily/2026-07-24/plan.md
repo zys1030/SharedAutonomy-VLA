@@ -29,7 +29,11 @@
 - [x] 接入真实 SpaceMouse（hidapi 线程读取），并在 `enable_motion=false` 下提供 teleop dry-run；
 - [x] 接入真实 CAN-FD JointCommander、双确认运动门闩，teleop 默认改用 stamp 工作区（运动仍默认关闭）；
 - [x] 极小范围 XYZ 真机复验（10 Hz 跟手；50 Hz 冒烟通过但体感钝；轴映射 OK；Z 漂移已修；采集默认 10 Hz）；
-- [ ] 设计 episode recorder / 同步观测 / 回放骨架（接口即可，不必完整落地；须遵守 `collection_teleop` 硬约束）。
+- [x] 设计 episode recorder / 同步观测 / 回放骨架（接口即可，不必完整落地；须遵守 `collection_teleop` 硬约束）。
+  - [x] `EpisodeRecorder` + `load_recorded_episode` 落盘/加载；
+  - [x] `ObservationSynchronizer` 同步规则与离线测试；
+  - [x] 双相机 `CameraSource` 适配器并接入 `ManualCartesianRunner.step()`；
+  - [ ] 可视化回放工具（非 P1 硬需求，留后续）。
 
 ## 开始前条件
 
@@ -40,8 +44,14 @@
 ## 今天不做
 
 - 采集正式人工轨迹或训练 ACT/VLA；
-- 固定第三视角相机采购或接入；
+- ~~固定第三视角相机采购或接入~~（相机已到；完成枚举、单路/双路延迟基线、软件接入 observation；支架安装与正式 FOV 仍待后续）；
 - 完整 SharedAutonomy 意图推理与动态 authority。
+
+## 计划外已完成（当日追加）
+
+- [x] 第三视角 C920 只读枚举并写入 `configs/local/external_rgb.local.yaml`；
+- [x] 外部 RGB / 双相机并行软件新鲜度检查（`scripts/check_external_rgb_latency.py`、`scripts/check_dual_camera_parallel.py`）；
+- [x] teleop dry-run 增加 `--enable-cameras`（双相机进每步 `synced_observation`）。
 
 ## 待决策 / 已决策
 

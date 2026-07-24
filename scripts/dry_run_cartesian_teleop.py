@@ -10,6 +10,7 @@ import argparse
 import json
 import sys
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sharedautonomy.assistance.safety_filter import CartesianSafetyFilter, CartesianSafetyLimits
@@ -27,6 +28,12 @@ from sharedautonomy.control.observation import (
     load_camera_runtime_config,
 )
 from sharedautonomy.control.realtime import RealtimeCartesianStateSource
+from sharedautonomy.control.recording import (
+    build_manual_episode_metadata,
+    record_cartesian_control_step,
+    write_effective_config_yaml,
+)
+from sharedautonomy.data import EpisodeRecorder
 from sharedautonomy.devices.spacemouse import HidSpaceMouse, SpaceMouseConfig
 from sharedautonomy.robot.canfd_commander import RealManCanfdJointCommander
 from sharedautonomy.robot.kinematics import RealManInverseKinematics
@@ -120,6 +127,22 @@ def parse_args() -> argparse.Namespace:
         "--enable-cameras",
         action="store_true",
         help="Start wrist RealSense + external UVC cameras and attach synced observations",
+    )
+    parser.add_argument(
+        "--record-dir",
+        default=None,
+        help=(
+            "Write a native episode under this directory (requires --enable-cameras). "
+            "Parent directory receives effective_config.yaml."
+        ),
+    )
+    parser.add_argument("--run-id", default=None, help="Run identifier for episode metadata")
+    parser.add_argument("--episode-id", default=None, help="Episode identifier (default: timestamp-based)")
+    parser.add_argument("--task-id", default="teleop-smoke", help="Task id stored in episode metadata")
+    parser.add_argument(
+        "--task-text",
+        default="Manual Cartesian teleop smoke recording.",
+        help="Task description stored in episode metadata",
     )
     return parser.parse_args()
 
@@ -215,6 +238,9 @@ def main() -> int:
     if canfd_smoothing < 0:
         raise ValueError("canfd-smoothing must be >= 0")
 
+    if args.record_dir is not None and not args.enable_cameras:
+        raise ValueError("--record-dir requires --enable-cameras so each step has synced observations")
+
     workspace, workspace_source = load_cartesian_workspace(args.workspace_yaml)
     teleop = HidSpaceMouse(
         SpaceMouseConfig(
@@ -254,6 +280,9 @@ def main() -> int:
     else:
         commander = MockJointCommander()
 
+    recorder: EpisodeRecorder | None = None
+    episode_dir: Path | None = None
+    effective_config_path: Path | None = None
     try:
         first = backend.read_snapshot()
         try:
@@ -304,46 +333,89 @@ def main() -> int:
             observation_synchronizer=observation_synchronizer,
         )
 
-        print(
-            json.dumps(
+        if args.record_dir is not None:
+            episode_dir = Path(args.record_dir)
+            run_dir = episode_dir.parent
+            run_dir.mkdir(parents=True, exist_ok=True)
+            run_id = args.run_id or run_dir.name
+            episode_id = args.episode_id or datetime.now(tz=UTC).strftime("episode-%Y%m%d-%H%M%S")
+            effective_config_path = run_dir / "effective_config.yaml"
+            write_effective_config_yaml(
+                effective_config_path,
                 {
-                    "operator_hint": (
-                        "Hold left SpaceMouse button (deadman) and move the cap. "
-                        f"Full stick ≈ {move_increment_m * 1000.0:.1f} mm/tick "
-                        f"({max_speed_m_s * 1000.0:.1f} mm/s). "
-                        + (
-                            "MOTION ENABLED: keep teach-pendant estop ready; release deadman to stop command stream."
-                            if motion_enabled
-                            else "Motion is disabled; this is a dry-run."
-                        )
-                    ),
-                    "duration_s": duration_s,
-                    "planned_steps": total_steps,
-                    "control_hz": control_hz,
-                    "enable_motion": motion_enabled,
-                    "enable_cameras": bool(args.enable_cameras),
-                    "move_increment_mm": round(float(move_increment_m) * 1000.0, 3),
-                    "max_linear_speed_mm_s": round(max_speed_m_s * 1000.0, 3),
-                    "max_linear_speed_source": speed_source,
-                    "xy_yaw_deg": float(args.xy_yaw_deg),
-                    "lock_z": bool(args.lock_z),
-                    "hold_flange_z_mm": (
-                        None if hold_flange_z_m is None else round(hold_flange_z_m * 1000.0, 3)
-                    ),
-                    "max_joint_step_deg": max_joint_step_deg,
-                    "ik_source": ("connected_arm" if motion_enabled else "offline_algo"),
-                    "input_timeout_s": input_timeout_s,
-                    "max_acceleration_m_s2": max_acceleration_m_s2,
-                    "canfd_follow": (bool(args.canfd_follow) if motion_enabled else None),
-                    "canfd_smoothing": (canfd_smoothing if motion_enabled else None),
-                    "motion_config_source": config_source,
-                    "workspace_source": workspace_source,
-                    "start_ee_position_m": first_ee,
+                    "teleop": {
+                        "ip": args.ip,
+                        "port": args.port,
+                        "control_hz": control_hz,
+                        "enable_motion": motion_enabled,
+                        "enable_cameras": True,
+                        "duration_s": duration_s,
+                        "planned_steps": total_steps,
+                        "move_increment_m": move_increment_m,
+                        "max_linear_speed_m_s": max_speed_m_s,
+                        "xy_yaw_deg": float(args.xy_yaw_deg),
+                        "lock_z": bool(args.lock_z),
+                        "hold_flange_z_m": hold_flange_z_m,
+                        "max_joint_step_deg": max_joint_step_deg,
+                        "canfd_follow": bool(args.canfd_follow) if motion_enabled else None,
+                        "canfd_smoothing": canfd_smoothing if motion_enabled else None,
+                        "workspace_source": workspace_source,
+                        "motion_config_source": config_source,
+                    },
+                    "task": {
+                        "task_id": args.task_id,
+                        "task_text": args.task_text,
+                    },
                 },
-                indent=2,
+            )
+            recorder = EpisodeRecorder(episode_dir)
+            recorder.start(
+                build_manual_episode_metadata(
+                    episode_id=episode_id,
+                    run_id=run_id,
+                    task_id=args.task_id,
+                    task_text=args.task_text,
+                    control_rate_hz=control_hz,
+                    effective_config_path=effective_config_path.as_posix(),
+                )
+            )
+
+        startup_payload = {
+            "operator_hint": (
+                "Hold left SpaceMouse button (deadman) and move the cap. "
+                f"Full stick ≈ {move_increment_m * 1000.0:.1f} mm/tick "
+                f"({max_speed_m_s * 1000.0:.1f} mm/s). "
+                + (
+                    "MOTION ENABLED: keep teach-pendant estop ready; release deadman to stop command stream."
+                    if motion_enabled
+                    else "Motion is disabled; this is a dry-run."
+                )
             ),
-            flush=True,
-        )
+            "duration_s": duration_s,
+            "planned_steps": total_steps,
+            "control_hz": control_hz,
+            "enable_motion": motion_enabled,
+            "enable_cameras": bool(args.enable_cameras),
+            "move_increment_mm": round(float(move_increment_m) * 1000.0, 3),
+            "max_linear_speed_mm_s": round(max_speed_m_s * 1000.0, 3),
+            "max_linear_speed_source": speed_source,
+            "xy_yaw_deg": float(args.xy_yaw_deg),
+            "lock_z": bool(args.lock_z),
+            "hold_flange_z_mm": (None if hold_flange_z_m is None else round(hold_flange_z_m * 1000.0, 3)),
+            "max_joint_step_deg": max_joint_step_deg,
+            "ik_source": ("connected_arm" if motion_enabled else "offline_algo"),
+            "input_timeout_s": input_timeout_s,
+            "max_acceleration_m_s2": max_acceleration_m_s2,
+            "canfd_follow": (bool(args.canfd_follow) if motion_enabled else None),
+            "canfd_smoothing": (canfd_smoothing if motion_enabled else None),
+            "motion_config_source": config_source,
+            "workspace_source": workspace_source,
+            "start_ee_position_m": first_ee,
+        }
+        if episode_dir is not None:
+            startup_payload["record_dir"] = str(episode_dir)
+            startup_payload["episode_id"] = recorder.metadata.episode_id if recorder else None
+        print(json.dumps(startup_payload, indent=2), flush=True)
 
         steps = []
         started_ns = time.perf_counter_ns()
@@ -358,6 +430,8 @@ def main() -> int:
                 print(json.dumps({"abort": "cartesian_safety", "detail": abort_reason}), flush=True)
                 break
             steps.append(step)
+            if recorder is not None:
+                record_cartesian_control_step(recorder, step)
             elapsed_s = (time.perf_counter_ns() - started_ns) / 1_000_000_000
             if elapsed_s >= next_progress_s:
                 progress_payload = {
@@ -366,8 +440,7 @@ def main() -> int:
                     "deadman_active": step.human_action.deadman_active,
                     "motion_sent": step.motion_sent,
                     "command_mm_s": [
-                        round(value * 1000.0, 2)
-                        for value in step.human_action.linear_velocity_m_s
+                        round(value * 1000.0, 2) for value in step.human_action.linear_velocity_m_s
                     ],
                     "requested_z_mm": round(float(step.requested_ee_position_m[2]) * 1000.0, 2),
                     "ee_z_mm": round(float(step.robot_state.ee_position_m[2]) * 1000.0, 2),
@@ -382,8 +455,19 @@ def main() -> int:
                 time.sleep(period_s)
 
         if not steps:
+            if recorder is not None and recorder.is_recording:
+                recorder.abort(
+                    failure_reason=abort_reason or "no_steps",
+                    ended_at_utc=datetime.now(tz=UTC),
+                )
             print(json.dumps({"status": "aborted", "reason": abort_reason or "no_steps"}), flush=True)
             return 1
+
+        if recorder is not None and recorder.is_recording:
+            if abort_reason:
+                recorder.abort(failure_reason=abort_reason, ended_at_utc=datetime.now(tz=UTC))
+            else:
+                recorder.end(success=True, ended_at_utc=datetime.now(tz=UTC))
 
         active_steps = [step for step in steps if step.human_action.deadman_active]
         nonzero_steps = [
@@ -394,9 +478,7 @@ def main() -> int:
         first_step = steps[0]
         last = steps[-1]
         last_ee = [float(value) for value in last.robot_state.ee_position_m]
-        delta_ee_mm = [
-            round((end - start) * 1000.0, 3) for start, end in zip(first_ee, last_ee, strict=True)
-        ]
+        delta_ee_mm = [round((end - start) * 1000.0, 3) for start, end in zip(first_ee, last_ee, strict=True)]
         summary = {
             "status": "aborted" if abort_reason else "ok",
             "abort_reason": abort_reason,
@@ -459,8 +541,16 @@ def main() -> int:
             }
             summary["last_wrist_camera_age_ms"] = last.synced_observation.wrist_age_ms
             summary["last_external_camera_age_ms"] = last.synced_observation.external_age_ms
+        if recorder is not None:
+            summary["record_dir"] = str(episode_dir)
+            summary["recorded_steps"] = recorder.step_count
+            summary["episode_status"] = recorder.status
+            if effective_config_path is not None:
+                summary["effective_config_path"] = str(effective_config_path)
         print(json.dumps(summary, indent=2), flush=True)
     finally:
+        if recorder is not None and recorder.is_recording:
+            recorder.abort(failure_reason="interrupted", ended_at_utc=datetime.now(tz=UTC))
         if camera_session is not None:
             camera_session.stop()
         if isinstance(commander, RealManCanfdJointCommander) and commander.commands_sent > 0:

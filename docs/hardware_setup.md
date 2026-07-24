@@ -84,6 +84,8 @@ SDK 连接耗时为 149.708 ms，断开耗时为 0.660 ms。完整 observation �
 
 同步读取 P95 已超过 20 ms，且最大值接近 50 ms，因此 50 Hz runner 不应在每个控制周期阻塞调用同步状态查询。控制路径应使用 realtime push callback 更新线程安全的最新状态缓存；控制周期读取缓存并计算 `state_age_ms`，同步查询只用于低频检查或降级诊断。
 
+2026-07-24 已将上述模式落地为库模块 `sharedautonomy.robot.realtime_state.RealManRealtimeStateSource`，并由 `RealtimeCartesianStateSource` 接入 manual Cartesian runner。只读验证入口：`scripts/dry_run_cartesian_udp.py`（`enable_motion=false`，默认不发运动命令）。正式 stamp 工作区几何仍以本机 local 配置为准；该脚本首轮 bring-up 使用 permissive workspace，只验证 UDP 年龄、FK/IK 与控制步串联。
+
 ### 低速 MoveJ 命令响应
 
 2026-07-23 在用户确认机械臂和末端周围净空、操作员在场且软件急停可用后，运行 `scripts/test_rm65_command_response.py`。测试仅使用 J6，以 `1%` 速度执行 `+0.5° / -0.5°` 往返 4 次，并用已有 5 ms 周期 UDP realtime push 检测关节位置首次变化。运动起点约 13.432°，结束后回到约 13.430°。
@@ -221,12 +223,33 @@ SpaceMouse yaw
 - **已确认**：官方关节范围与控制器返回值一致；
 - **已确认**：目标超过关节上下限时会在 SDK 调用前裁剪；
 - **已确认**：单周期最大关节变化为 1°；按 nominal 50 Hz 计算，相当于最多约 50°/s，低于官方关节速度上限；
-- **纯函数已实现，尚未接入 Cartesian runner**：基于真实 `dt` 的末端速度/加速度限制；具体上限仍须随控制器参数一起确定；
-- **纯函数已实现，尚未接入 Cartesian runner**：固定竖直夹爪的凸四边形 XY 工作区、桌面净空、固定姿态和输入新鲜度检查。
+- **已接入 manual Cartesian runner（离线 mock / dry-run）**：基于真实 `dt` 的末端速度/加速度限制；当前保守初值见 `configs/collection/manual_cartesian.yaml`；
+- **已接入 manual Cartesian runner（离线 mock / dry-run）**：固定竖直夹爪的凸四边形 XY 工作区、桌面净空、固定姿态和输入新鲜度检查。
 
-旧 `stamp` 装置的机械臂底座、桌面和夹爪安装未改变，SDK 返回法兰位姿。用户复核的四个边界点（Base 坐标系，单位由 mm 转为 m）依次为 `(-0.456, 0.107)`、`(-0.387, -0.236)`、`(-0.170, -0.420)`、`(-0.150, 0.068)`，构成凸四边形。夹爪固定竖直向下时，旧项目实测法兰到夹爪尖端偏移为 0.178 m。用户确认法兰 Z 为 0.180 m 时夹爪仍与桌面有缝，且抓取任务需要最低到达 0.178 m，因此不额外叠加净空，默认最低法兰 Z 为 0.178 m。几何值保存在本机 `configs/local/rm65_safety.local.yaml`，不会写入共享硬件配置。
+旧 `stamp` 装置的机械臂底座、桌面和夹爪安装未改变，SDK 返回法兰位姿。用户复核的四个边界点（Base 坐标系，单位由 mm 转为 m）依次为 `(-0.456, 0.107)`、`(-0.387, -0.236)`、`(-0.170, -0.420)`、`(-0.150, 0.068)`，构成凸四边形。夹爪固定竖直向下时，旧项目实测法兰到夹爪尖端偏移为 0.178 m。用户确认法兰 Z 为 0.180 m 时夹爪仍与桌面有缝，且抓取任务需要最低到达 0.178 m，因此不额外叠加净空，默认最低法兰 Z 为 0.178 m。几何值保存在本机 `configs/local/rm65_safety.local.yaml`（模板见 `configs/local/rm65_safety.example.yaml`），不会写入共享硬件配置。
 
-因此关节限位和任务空间纯函数机制已经具备。剩余工作是在 Cartesian/SpaceMouse runner 落地时，把“输入时间检查 → 真实 `dt` 速度/加速度限制 → 固定姿态检查 → 工作空间整段检查 → IK → 关节过滤”串到每次 SDK 调用之前，并确定最大高度、线速度、线加速度、姿态容差和输入超时。真实控制配置继续保持 `enable_motion=false`。
+Cartesian/SpaceMouse runner 已按“输入时间检查 → 真实 `dt` 速度/加速度限制 → 固定姿态检查 → 工作空间整段检查 → IK → 关节过滤”串到控制步中。当前保守初值：`max_speed_m_s=0.05`、`max_acceleration_m_s2=0.25`、`orientation_tolerance_rad=0.05`、`input_timeout_s=0.1`、`robot_state_timeout_s=0.05`、`max_flange_z_m=0.45`。
+
+2026-07-24 首轮 XYZ 真机验收（5 mm/s、双确认）已通：`commands_sent>0` 且法兰有可见位移。随后发现并修复：
+
+1. **轴映射**：HID 直读需 Compact pyspacemouse LEGACY 的 Y/Z 符号，再套 `vertical_up`；本机手感另需 `base_xy_yaw_deg=90`（Z 正确，XY 转 90°）。
+2. **抖动**：真实采集用低跟随 `follow=False` + `radio=50` @ **10 Hz**（与 try_sc 一致）；禁止在 50 Hz 下开高跟随。
+3. **Z 漂移（非映射问题）**：命令 `vz=0` / `hold_z` 钉死后，实测 Z 仍漂，是因为 10 Hz 仍用 `max_joint_step_deg=1`（仅 10°/s）重度裁剪 IK，中间关节目标的 FK 高度对不上。修复：关节步进按 **约 50°/s** 随频率缩放（10 Hz → 5°/step），真机 IK 用 **connected arm** 而非离线 Algo。复验后 `delta_z ≈ 0.03 mm`，轴映射确认正确。
+
+### 正式采集时避免再踩坑（硬约束）
+
+后续 manual / SharedAutonomy 采集 runner 必须固定：
+
+- **默认 `control_rate_hz=10`**（2026-07-24 决策）：与 try_sc 手感一致、低跟随 CAN-FD 跟手；相机约 30 FPS，ACT 吃的是 action chunk，不强制 50 Hz 微步。早期文档里的「50 Hz nominal」表示同步/读传感器的余量目标，**不是**采集命令频率的硬性要求。50 Hz 笛卡尔冒烟已通过（Z 稳、无明显抖动），但 `radio=50` 下小步体感偏钝，故不作为默认采集率。
+- `max_joint_step_deg ≈ 50/control_rate_hz`（勿把 50 Hz 的 1° 原样搬到 10 Hz）；
+- IK：`RealManInverseKinematics.from_arm(connected_arm)`；
+- CAN-FD：`follow=false`，`smoothing/radio=50`；
+- 步长：try_sc 风格 `move_increment_m`（默认 0.01），不要只用极小 mm/s 却期望明显位移；
+- SpaceMouse：HID LEGACY 符号 + `vertical_up` + 本机 `base_xy_yaw_deg=90`；
+- 桌面平面 reaching：`lock_z` + `hold_flange_z_m=episode_start_z`（只把 `vz` 置零不够，必须钉绝对高度）；
+- 工作区：stamp/`rm65_safety.local.yaml`；运动双确认；`enable_motion` 默认仍为 false。
+
+参考配置块见 `configs/collection/manual_cartesian.yaml` 的 `collection_teleop`。
 
 在用户确认工作区净空、夹爪无物体且示教器在线后，仅对 J6 下发低速测试：
 

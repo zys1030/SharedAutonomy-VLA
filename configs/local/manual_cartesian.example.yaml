@@ -1,0 +1,5 @@
+# Example local overrides for manual Cartesian teleop.
+# Copy to manual_cartesian.local.yaml on the lab machine.
+# Motion still requires BOTH enable_motion: true AND CLI --allow-motion.
+
+enable_motion: false

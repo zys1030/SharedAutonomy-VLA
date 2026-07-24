@@ -6,8 +6,9 @@
 
 - 当前阶段：**Week 1：硬件、数据与最小训练闭环**
 - 最近完成的每日计划：[2026-07-23 plan](daily/2026-07-23/plan.md)
+- 当前每日计划：[2026-07-24 plan](daily/2026-07-24/plan.md)
 - 最近工作日志：[2026-07-23 log](daily/2026-07-23/log.md)
-- 下一步主线：把 Cartesian 安全过滤接入 SpaceMouse 控制 runner，并完成 dry-run
+- 下一步主线：episode recorder / 采集 runner（默认 **10 Hz** `collection_teleop`；50 Hz 非训练硬需求）
 
 ## Week 1：硬件、数据与最小训练闭环
 
@@ -34,8 +35,8 @@
 - [ ] 局部趋近辅助器；
 - [ ] 动态 authority；
 - [ ] 安全过滤和动作限幅；
-  - 关节过滤和 Cartesian 纯函数已实现；
-  - 尚需接入运行时控制链并完成小范围验收；
+  - 关节过滤、Cartesian 纯函数、manual runner 安全链与真机 XYZ 小范围验收已完成（2026-07-24）；
+  - 尚需接入正式采集 runner / SharedAutonomy 运行时并长期稳定 running；
 - [ ] 同步记录三路动作与 belief。
 
 验收标准：

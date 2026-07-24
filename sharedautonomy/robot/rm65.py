@@ -279,7 +279,9 @@ class RM65(Robot):
         status, joints = self._arm.rm_get_joint_degree()
         self._check_status(status, "read joint positions")
         if len(joints) < len(JOINT_KEYS):
-            raise RuntimeError(f"RM-65B SDK returned {len(joints)} joints, expected at least {len(JOINT_KEYS)}")
+            raise RuntimeError(
+                f"RM-65B SDK returned {len(joints)} joints, expected at least {len(JOINT_KEYS)}"
+            )
         return [float(value) for value in joints[: len(JOINT_KEYS)]]
 
     def _read_end_effector_pose(self, joints: list[float]) -> list[float]:
@@ -287,6 +289,24 @@ class RM65(Robot):
         if len(pose) != len(EE_KEYS):
             raise RuntimeError(f"RM-65B SDK returned an invalid end-effector pose of length {len(pose)}")
         return [float(value) for value in pose]
+
+    def solve_inverse_kinematics(
+        self,
+        *,
+        joint_seed_deg: list[float] | tuple[float, ...],
+        target_position_m: list[float] | tuple[float, ...],
+        target_rpy_rad: list[float] | tuple[float, ...],
+    ) -> list[float]:
+        """Solve Cartesian pose to joints using the connected RealMan SDK handle."""
+        self._require_connected()
+        from sharedautonomy.robot.kinematics import solve_inverse_kinematics
+
+        return solve_inverse_kinematics(
+            self._arm,
+            joint_seed_deg=joint_seed_deg,
+            target_position_m=target_position_m,
+            target_rpy_rad=target_rpy_rad,
+        )
 
     def _require_connected(self) -> None:
         if not self.is_connected:

@@ -44,11 +44,11 @@
 
 ### 1. 为什么要分别记录三种动作
 
-- **一句话**：`HumanAction` 是人想怎么动，`AssistAction` 是辅助器建议怎么修正，`ExecutedAction` 是安全过滤后真正发送给机器人的动作。
+- **一句话**：`HumanAction` 是人的控制输入，`AssistAction` 是辅助策略提出的物理空间动作，`ExecutedAction` 是融合、限幅和安全过滤后真正执行的动作。
 - **为什么重要**：如果只保存最终动作，就无法分析操作者贡献、辅助强度、人机冲突，也无法公平比较 Manual 与 SharedAutonomy 数据。
 - **本项目怎么做**：三种动作使用独立接口，但共享同一控制步语义；`ExecutedAction` 还要记录安全过滤结果。
 - **代码入口**：[`../../../sharedautonomy/data/schema.py`](../../../sharedautonomy/data/schema.py) 和 [`../../decisions/0001-runtime-data-interfaces.md`](../../decisions/0001-runtime-data-interfaces.md)。
-- **自测问题**：为什么不能用 `ExecutedAction - HumanAction` 代替显式记录 `AssistAction`？
+- **自测问题**：在什么条件下可以用 `ExecutedAction - HumanAction` 反推出“净辅助增量”？为什么这仍不能完全替代原始 `AssistAction`？
 
 ### 2. 统一时间戳不是强行统一设备时钟
 
@@ -57,6 +57,17 @@
 - **本项目怎么做**：UTC 用于审计，设备 timestamp 用于保留来源信息，主机 monotonic 时间用于调度、新鲜度检查和对齐。
 - **代码入口**：[`../../../sharedautonomy/data/schema.py`](../../../sharedautonomy/data/schema.py) 中的 `SampleTimestamp`。
 - **自测问题**：为什么不能直接比较 D435i timestamp 和 SpaceMouse timestamp 来计算两者延迟？
+- **参考答案**：因为它们可能来自不同设备、不同 clock domain、不同起点和不同单位，数值相减没有物理意义。采集时应保留各自的 `device_timestamp_ms`，同时记录主机收到数据时的 `received_monotonic_ns`；控制循环只用同一台主机的 monotonic 时间计算数据年龄和先后顺序。
+
+时间戳可以先按三层理解：
+
+| 时间 | 用途 | 能否直接跨设备相减 |
+| --- | --- | --- |
+| `device_timestamp_ms` | 设备内部标记帧或事件产生的时间 | 不能，除非已经校准 clock domain |
+| `timestamp_utc` | 人类可读的运行审计和跨日志关联 | 不适合控制循环计时，可能受系统校时影响 |
+| `received_monotonic_ns` | 主机收到数据的单调时间 | 可以在同一主机内计算 age、间隔和先后顺序 |
+
+例如：D435i 报告自己的 `device_timestamp_ms=1000`，SpaceMouse 报告 `device_timestamp_ms=1005`，这不代表两者相差 5 ms；只有它们到达同一主机后，才可以用各自的 `received_monotonic_ns` 比较软件链路上的到达顺序和新鲜度。这个方法测到的是“软件收到数据的年龄”，不是严格的相机曝光到控制器执行的光学物理延迟；后者需要 LED、时间码或高速摄影等外部基准。
 
 ### 3. 135 ms 延迟到底代表什么
 
@@ -84,16 +95,18 @@
 
 ### 面试式自测
 
-1. `HumanAction`、`AssistAction` 和 `ExecutedAction` 为什么必须分开？
-   - 参考要点：意图、辅助建议、实际执行；归因；冲突；数据分析。
-2. 设备同步为什么选主机 monotonic 时间，而不是只用 UTC？
-   - 参考要点：单调、不回跳、clock domain、设备时间保留。
-3. CAN-FD 的低 SDK 调用耗时为什么不等于低物理响应延迟？
-   - 参考要点：异步下发、控制器缓冲、首次运动反馈。
-4. 当前桌面安全约束如何考虑夹爪长度？
-   - 参考要点：法兰位姿、178 mm 偏移、固定竖直、只补偿一次。
-5. 当前安全过滤还差哪一步才能保护实际 Cartesian 遥操作？
-   - 参考要点：接入 runner；必须位于每次 SDK 调用之前；参数定稿和 dry-run。
+1. 如果共享控制明确采用 `e = h + αa`，什么时候可以由 `e` 和 `h` 反推出 `a`？
+   - 参考答案：同一时刻、同一坐标系、同一单位，并且已知且非零的 `α` 时，可以用 `a=(e-h)/α`。如果公式是 `e=(1-α)h+αa`，则应使用 `a=(e-(1-α)h)/α`。安全裁剪、投影、IK 或非线性融合之后，相减最多得到执行残差，不能还原原始辅助提议。
+2. 为什么仍然要分别保存 `HumanAction`、`AssistAction` 和 `ExecutedAction`？
+   - 参考答案：三者分别表示人的输入、辅助器的原始提议和最终执行结果。显式保存它们可以分析 authority、人机冲突和安全介入，也能在更换融合策略后离线重放；而且 `confidence`、`inferred_target_id` 等辅助元数据无法由动作相减得到。
+3. 设备同步为什么选主机 monotonic 时间，而不是只用 UTC？
+   - 参考答案：UTC 适合审计和跨日志阅读，但可能被系统校时调整；monotonic clock 虽然没有可读的绝对日期，却保证在同一主机内不回跳，适合计算输入 age、控制周期和超时。设备原始时间仍要保留，不能假装它们已经共享同一时钟。
+4. CAN-FD 的低 SDK 调用耗时为什么不等于低物理响应延迟？
+   - 参考答案：SDK 调用耗时只表示 Python 调用和消息提交很快；消息还要经过传输、控制器调度和驱动响应。135 ms 指令到首次检测运动的时间，因此可能远大于 0.188 ms 的 SDK 调用耗时。
+5. 当前桌面安全约束如何考虑夹爪长度？
+   - 参考答案：SDK 给的是法兰位姿，固定竖直向下时把法兰到夹爪尖端的 178 mm 偏移转换到 Base 坐标系，使用夹爪尖端检查 XY 区域，同时把最低法兰 Z 设为 178 mm；这个长度只能补偿一次。
+6. 当前安全过滤还差哪一步才能保护实际 Cartesian 遥操作？
+   - 参考答案：纯函数已经存在，但还要接入实际 runner，并保证每次 SDK 调用前按“输入新鲜度 → 真实 dt 限速 → 固定姿态 → 工作空间 → IK → 关节过滤”的顺序执行；之后还要定稿速度、加速度、超时等参数并先做 mock/dry-run。
 
 ## 代码与文档变更
 

@@ -1,0 +1,67 @@
+# Shared defaults for the manual Cartesian / SpaceMouse runner.
+# Machine-local IP, device paths, and workspace geometry belong in configs/local/.
+#
+# Real-robot collection MUST follow the teleop bring-up rules validated 2026-07-24
+# (see docs/hardware_setup.md). Do not silently change these without re-checking Z drift.
+
+# Dry-run / offline unit-test cadence. Real collection teleop uses 10 Hz (try_sc).
+control_rate_hz: 50.0
+enable_motion: false
+allow_rotation: false
+
+# Joint step is a RATE budget, not a fixed angle. Keep ~50 deg/s:
+#   max_joint_step_deg ≈ 50 / control_rate_hz
+# At 50 Hz → 1 deg/step; at 10 Hz collection → 5 deg/step.
+# Under-clipping IK at low Hz was the Z-drift root cause while commanding hold-Z.
+max_joint_step_deg: 1.0
+# Real collection overrides (applied by teleop / future collector, not by this file alone):
+#   control_rate_hz: 10.0
+#   max_joint_step_deg: 5.0
+#   move_increment_m: 0.01
+#   canfd: follow=false, radio/smoothing=50
+#   ik: connected arm (not offline Algo)
+#   spacemouse: Compact LEGACY HID signs + vertical_up + base_xy_yaw_deg=90
+#   planar reaching: lock_z / hold_flange_z_m from episode start
+
+spacemouse:
+  deadzone: 0.1
+  max_linear_speed_m_s: 0.05
+  max_angular_speed_rad_s: 0.4
+  mount_orientation: vertical_up
+  # Extra base XY yaw after vertical_up (deg). Lab feel: +90; try_sc matrix alone: 0.
+  base_xy_yaw_deg: 90.0
+  input_timeout_s: 0.1
+  drain_max_reads: 128
+  allow_rotation: false
+
+# Fixed vertical gripper placeholder (rx, ry, rz) in radians.
+# Collection should freeze the measured start RPY rather than this placeholder.
+fixed_ee_rpy_rad: [0.0, 1.5707963267948966, 0.0]
+
+# Conservative first-stage Cartesian safety defaults. Workspace polygon and
+# tool offset remain machine-local; see configs/local/rm65_safety.example.yaml.
+safety:
+  max_speed_m_s: 0.05
+  max_acceleration_m_s2: 0.25
+  orientation_tolerance_rad: 0.05
+  input_timeout_s: 0.1
+  robot_state_timeout_s: 0.05
+  max_flange_z_m: 0.45
+
+# try_sc-aligned real collection profile (reference; collector should load explicitly).
+# Decision 2026-07-24: use 10 Hz command/record for manual Cartesian collection.
+# Early "50 Hz nominal" was sensor-fusion headroom, not a hard ACT/VLA training
+# requirement. Cameras are ~30 FPS; ACT consumes action chunks, not raw 50 Hz
+# micro-steps. 10 Hz matched try_sc feel, low-follow CAN-FD, and smaller episodes.
+collection_teleop:
+  control_rate_hz: 10.0
+  move_increment_m: 0.01
+  max_joint_rate_deg_s: 50.0
+  canfd_follow: false
+  canfd_smoothing: 50
+  ik_source: connected_arm
+  lock_z_for_planar_reaching: true
+  base_xy_yaw_deg: 90.0
+  # 50 Hz Cartesian smoke also passed (Z stable, no visible jitter) but felt
+  # sluggish under radio=50 with 2 mm steps; not the default collection rate.
+  notes: "Prefer 10 Hz collection unless a later ACT ablation shows benefit from denser actions."

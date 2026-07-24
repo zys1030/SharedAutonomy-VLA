@@ -1,0 +1,420 @@
+"""Cartesian teleop entry: real SpaceMouse + UDP + stamp workspace.
+
+Motion stays disabled unless BOTH local config enable_motion and CLI
+``--allow-motion`` are set. Default runs remain read-only dry-runs.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+from pathlib import Path
+
+from sharedautonomy.assistance.safety_filter import CartesianSafetyFilter, CartesianSafetyLimits
+from sharedautonomy.assistance.workspace_config import load_cartesian_workspace
+from sharedautonomy.control.manual import (
+    ManualCartesianConfig,
+    MockJointCommander,
+    build_manual_cartesian_runner,
+)
+from sharedautonomy.control.motion_gate import resolve_motion_enabled
+from sharedautonomy.control.realtime import RealtimeCartesianStateSource
+from sharedautonomy.devices.spacemouse import HidSpaceMouse, SpaceMouseConfig
+from sharedautonomy.robot.canfd_commander import RealManCanfdJointCommander
+from sharedautonomy.robot.kinematics import RealManInverseKinematics
+from sharedautonomy.robot.realtime_state import RealManRealtimeStateSource
+from sharedautonomy.robot.safety import CartesianSafetyError, validate_cartesian_segment
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Cartesian SpaceMouse teleop with UDP state and stamp workspace. "
+            "Motion requires dual confirmation: config enable_motion=true AND --allow-motion."
+        )
+    )
+    parser.add_argument("--ip", required=True, help="RM-65B controller IP address")
+    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--duration-s", type=float, default=20.0)
+    parser.add_argument("--steps", type=int, default=None)
+    parser.add_argument(
+        "--control-hz",
+        type=float,
+        default=None,
+        help="Control loop rate. Default: 10 Hz with motion enabled (try_sc), else 50 Hz dry-run.",
+    )
+    parser.add_argument("--device-index", type=int, default=0)
+    parser.add_argument("--deadzone", type=float, default=0.1)
+    parser.add_argument(
+        "--max-linear-speed-m-s",
+        type=float,
+        default=None,
+        help=(
+            "Teleop speed cap (m/s). Stick is soft-clamped to this. "
+            "If omitted with motion enabled, derived from --move-increment-m / dt "
+            "(try_sc-style). Dry-run default: 0.05."
+        ),
+    )
+    parser.add_argument(
+        "--move-increment-m",
+        type=float,
+        default=None,
+        help=(
+            "Full-stick Cartesian step per control tick (meters), try_sc action_limit_m style. "
+            "Motion default: 0.01 (10 mm/tick @ 10 Hz ≈ 100 mm/s). Ignored if "
+            "--max-linear-speed-m-s is set."
+        ),
+    )
+    parser.add_argument(
+        "--xy-yaw-deg",
+        type=float,
+        default=90.0,
+        help=(
+            "Extra base-frame XY yaw after vertical_up (degrees). "
+            "Default 90 (CCW about +Z) after user reported Z OK but XY needs a quarter-turn; "
+            "try -90 if the trial spins the wrong way, or 0 to match try_sc matrices exactly."
+        ),
+    )
+    parser.add_argument(
+        "--lock-z",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Zero base-frame Z command after mapping (XY planar only; isolates Z crosstalk)",
+    )
+    parser.add_argument(
+        "--workspace-yaml",
+        default=None,
+        help="Optional path to rm65_safety YAML (default: local then example then stamp fixture)",
+    )
+    parser.add_argument(
+        "--config-enable-motion",
+        action="store_true",
+        help="Stand-in for local config enable_motion=true (required with --allow-motion)",
+    )
+    parser.add_argument(
+        "--allow-motion",
+        action="store_true",
+        help="CLI motion confirmation; alone is not enough without --config-enable-motion",
+    )
+    parser.add_argument(
+        "--canfd-follow",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="CAN-FD follow mode when motion is enabled (default: low-follow / False, matching try_sc)",
+    )
+    parser.add_argument(
+        "--canfd-smoothing",
+        type=int,
+        default=50,
+        help="rm_movej_canfd radio/smoothing when motion is enabled (try_sc uses 50)",
+    )
+    return parser.parse_args()
+
+
+_DEFAULT_DRY_RUN_SPEED_M_S = 0.05
+_DEFAULT_MOTION_MOVE_INCREMENT_M = 0.01  # try_sc robot_arm.yaml action_limit_m
+_DEFAULT_DRY_RUN_CONTROL_HZ = 50.0
+_DEFAULT_MOTION_CONTROL_HZ = 10.0
+_MIN_INPUT_TIMEOUT_S = 0.1
+_MIN_ROBOT_STATE_TIMEOUT_S = 0.05
+
+
+def _load_config_enable_motion(*, cli_config_enable_motion: bool) -> tuple[bool, str]:
+    local_path = Path("configs/local/manual_cartesian.local.yaml")
+    if local_path.is_file():
+        import yaml
+
+        with local_path.open(encoding="utf-8") as handle:
+            payload = yaml.safe_load(handle) or {}
+        if not isinstance(payload, dict):
+            raise ValueError(f"{local_path} must contain a mapping")
+        return bool(payload.get("enable_motion", False)), str(local_path)
+    if cli_config_enable_motion:
+        return True, "--config-enable-motion"
+    return False, "configs/collection/manual_cartesian.yaml (default false)"
+
+
+def main() -> int:
+    args = parse_args()
+    config_enable_motion, config_source = _load_config_enable_motion(
+        cli_config_enable_motion=args.config_enable_motion
+    )
+    motion_enabled = resolve_motion_enabled(
+        config_enable_motion=config_enable_motion,
+        cli_allow_motion=args.allow_motion,
+    )
+    if args.control_hz is None:
+        control_hz = _DEFAULT_MOTION_CONTROL_HZ if motion_enabled else _DEFAULT_DRY_RUN_CONTROL_HZ
+    else:
+        control_hz = float(args.control_hz)
+    if control_hz <= 0.0:
+        raise ValueError("control-hz must be positive")
+    period_s = 1.0 / control_hz
+    if args.steps is not None:
+        if args.steps < 1:
+            raise ValueError("steps must be >= 1")
+        total_steps = int(args.steps)
+        duration_s = total_steps * period_s
+    else:
+        if float(args.duration_s) <= 0.0:
+            raise ValueError("duration-s must be positive")
+        duration_s = float(args.duration_s)
+        total_steps = max(1, int(round(duration_s * control_hz)))
+
+    if args.max_linear_speed_m_s is not None and args.move_increment_m is not None:
+        raise ValueError("Pass only one of --max-linear-speed-m-s or --move-increment-m")
+    move_increment_m: float | None
+    speed_source: str
+    if args.max_linear_speed_m_s is not None:
+        max_speed_m_s = float(args.max_linear_speed_m_s)
+        move_increment_m = max_speed_m_s * period_s
+        speed_source = "cli --max-linear-speed-m-s"
+    elif motion_enabled:
+        if args.move_increment_m is None:
+            move_increment_m = _DEFAULT_MOTION_MOVE_INCREMENT_M
+            speed_source = "default_motion_move_increment_0.01"
+        else:
+            move_increment_m = float(args.move_increment_m)
+            speed_source = "cli --move-increment-m"
+        if move_increment_m <= 0.0:
+            raise ValueError("move-increment-m must be positive")
+        # Velocity pipeline: full stick advances move_increment_m each tick.
+        max_speed_m_s = move_increment_m / period_s
+    else:
+        max_speed_m_s = _DEFAULT_DRY_RUN_SPEED_M_S
+        move_increment_m = max_speed_m_s * period_s
+        speed_source = "default_dry_run_0.05"
+    if max_speed_m_s <= 0.0:
+        raise ValueError("max-linear-speed-m-s must be positive")
+    # Reach the speed cap in about one control period (try_sc has no separate accel ramp).
+    max_acceleration_m_s2 = max(max_speed_m_s / period_s, max_speed_m_s / 0.2)
+    # At 10 Hz, 100 ms input timeout sits on the period boundary and can false-trigger stale holds.
+    input_timeout_s = max(_MIN_INPUT_TIMEOUT_S, 2.0 * period_s)
+    robot_state_timeout_s = max(_MIN_ROBOT_STATE_TIMEOUT_S, 0.5 * period_s)
+
+    if motion_enabled and bool(args.canfd_follow) and period_s > 0.010 + 1e-12:
+        raise ValueError(
+            "High-follow CAN-FD requires control period <= 10 ms (SDK). "
+            f"Got control-hz={control_hz} ({period_s * 1000.0:.1f} ms). "
+            "Use --no-canfd-follow (default) or raise --control-hz to >= 100."
+        )
+    canfd_smoothing = int(args.canfd_smoothing)
+    if canfd_smoothing < 0:
+        raise ValueError("canfd-smoothing must be >= 0")
+
+    workspace, workspace_source = load_cartesian_workspace(args.workspace_yaml)
+    teleop = HidSpaceMouse(
+        SpaceMouseConfig(
+            deadzone=args.deadzone,
+            max_linear_speed_m_s=max_speed_m_s,
+            mount_orientation="vertical_up",
+            base_xy_yaw_deg=float(args.xy_yaw_deg),
+            lock_z=bool(args.lock_z),
+            allow_rotation=False,
+            input_timeout_s=input_timeout_s,
+        ),
+        device_index=args.device_index,
+    )
+    backend = RealManRealtimeStateSource(ip=args.ip, port=args.port)
+    teleop.connect()
+    backend.connect()
+    commander: MockJointCommander | RealManCanfdJointCommander
+    if motion_enabled:
+        commander = RealManCanfdJointCommander(
+            backend.arm,
+            follow=bool(args.canfd_follow),
+            smoothing=canfd_smoothing,
+            armed=True,
+        )
+    else:
+        commander = MockJointCommander()
+
+    try:
+        first = backend.read_snapshot()
+        try:
+            validate_cartesian_segment(first.ee_position_m, first.ee_position_m, workspace)
+        except CartesianSafetyError as exc:
+            raise RuntimeError(
+                "Current flange pose is outside the stamp workspace; "
+                "move the arm into the safe region before teleop. "
+                f"pose={list(first.ee_position_m)} source={workspace_source}. detail={exc}"
+            ) from exc
+
+        fixed_rpy = tuple(float(value) for value in first.ee_rpy_rad)
+        first_ee = [float(value) for value in first.ee_position_m]
+        hold_flange_z_m = float(first_ee[2]) if bool(args.lock_z) else None
+        # Keep the Day-1 ~50 deg/s joint-rate budget when control_hz changes.
+        # At 10 Hz, max_joint_step_deg=1 is only 10 deg/s and clips IK solutions so
+        # heavily that commanded hold-Z Cartesian targets are not reachable → Z drift.
+        max_joint_step_deg = max(1.0, 50.0 / control_hz)
+        safety = CartesianSafetyFilter(
+            workspace=workspace,
+            limits=CartesianSafetyLimits(
+                max_speed_m_s=max_speed_m_s,
+                max_acceleration_m_s2=max_acceleration_m_s2,
+                fixed_ee_rpy_rad=fixed_rpy,
+                input_timeout_s=input_timeout_s,
+                robot_state_timeout_s=robot_state_timeout_s,
+            ),
+        )
+        # try_sc solves IK on the connected arm; offline Algo can disagree with real FK.
+        inverse_kinematics = (
+            RealManInverseKinematics.from_arm(backend.arm)
+            if motion_enabled
+            else RealManInverseKinematics.offline_rm65()
+        )
+        runner = build_manual_cartesian_runner(
+            config=ManualCartesianConfig(
+                control_rate_hz=control_hz,
+                enable_motion=motion_enabled,
+                fixed_ee_rpy_rad=fixed_rpy,
+                hold_flange_z_m=hold_flange_z_m,
+                max_joint_step_deg=max_joint_step_deg,
+            ),
+            teleop=teleop,
+            robot_state_source=RealtimeCartesianStateSource(backend),
+            safety_filter=safety,
+            inverse_kinematics=inverse_kinematics,
+            joint_commander=commander,
+        )
+
+        print(
+            json.dumps(
+                {
+                    "operator_hint": (
+                        "Hold left SpaceMouse button (deadman) and move the cap. "
+                        f"Full stick ≈ {move_increment_m * 1000.0:.1f} mm/tick "
+                        f"({max_speed_m_s * 1000.0:.1f} mm/s). "
+                        + (
+                            "MOTION ENABLED: keep teach-pendant estop ready; release deadman to stop command stream."
+                            if motion_enabled
+                            else "Motion is disabled; this is a dry-run."
+                        )
+                    ),
+                    "duration_s": duration_s,
+                    "planned_steps": total_steps,
+                    "control_hz": control_hz,
+                    "enable_motion": motion_enabled,
+                    "move_increment_mm": round(float(move_increment_m) * 1000.0, 3),
+                    "max_linear_speed_mm_s": round(max_speed_m_s * 1000.0, 3),
+                    "max_linear_speed_source": speed_source,
+                    "xy_yaw_deg": float(args.xy_yaw_deg),
+                    "lock_z": bool(args.lock_z),
+                    "hold_flange_z_mm": (
+                        None if hold_flange_z_m is None else round(hold_flange_z_m * 1000.0, 3)
+                    ),
+                    "max_joint_step_deg": max_joint_step_deg,
+                    "ik_source": ("connected_arm" if motion_enabled else "offline_algo"),
+                    "input_timeout_s": input_timeout_s,
+                    "max_acceleration_m_s2": max_acceleration_m_s2,
+                    "canfd_follow": (bool(args.canfd_follow) if motion_enabled else None),
+                    "canfd_smoothing": (canfd_smoothing if motion_enabled else None),
+                    "motion_config_source": config_source,
+                    "workspace_source": workspace_source,
+                    "start_ee_position_m": first_ee,
+                },
+                indent=2,
+            ),
+            flush=True,
+        )
+
+        steps = []
+        started_ns = time.perf_counter_ns()
+        next_progress_s = 5.0
+        abort_reason: str | None = None
+        for index in range(total_steps):
+            now_ns = time.perf_counter_ns()
+            try:
+                step = runner.step(now_monotonic_ns=now_ns, dt_s=period_s)
+            except CartesianSafetyError as exc:
+                abort_reason = repr(exc)
+                print(json.dumps({"abort": "cartesian_safety", "detail": abort_reason}), flush=True)
+                break
+            steps.append(step)
+            elapsed_s = (time.perf_counter_ns() - started_ns) / 1_000_000_000
+            if elapsed_s >= next_progress_s:
+                print(
+                    json.dumps(
+                        {
+                            "progress_s": round(elapsed_s, 1),
+                            "steps_done": index + 1,
+                            "deadman_active": step.human_action.deadman_active,
+                            "motion_sent": step.motion_sent,
+                            "command_mm_s": [
+                                round(value * 1000.0, 2)
+                                for value in step.human_action.linear_velocity_m_s
+                            ],
+                            "requested_z_mm": round(float(step.requested_ee_position_m[2]) * 1000.0, 2),
+                            "ee_z_mm": round(float(step.robot_state.ee_position_m[2]) * 1000.0, 2),
+                        }
+                    ),
+                    flush=True,
+                )
+                next_progress_s += 5.0
+            if index + 1 < total_steps:
+                time.sleep(period_s)
+
+        if not steps:
+            print(json.dumps({"status": "aborted", "reason": abort_reason or "no_steps"}), flush=True)
+            return 1
+
+        active_steps = [step for step in steps if step.human_action.deadman_active]
+        nonzero_steps = [
+            step
+            for step in active_steps
+            if any(abs(value) > 1e-9 for value in step.human_action.linear_velocity_m_s)
+        ]
+        first_step = steps[0]
+        last = steps[-1]
+        last_ee = [float(value) for value in last.robot_state.ee_position_m]
+        delta_ee_mm = [
+            round((end - start) * 1000.0, 3) for start, end in zip(first_ee, last_ee, strict=True)
+        ]
+        summary = {
+            "status": "aborted" if abort_reason else "ok",
+            "abort_reason": abort_reason,
+            "enable_motion": motion_enabled,
+            "teleop": "hid_spacemouse",
+            "workspace_source": workspace_source,
+            "motion_config_source": config_source,
+            "move_increment_mm": round(float(move_increment_m) * 1000.0, 3),
+            "max_linear_speed_mm_s": round(max_speed_m_s * 1000.0, 3),
+            "duration_s": round((time.perf_counter_ns() - started_ns) / 1_000_000_000, 3),
+            "steps": len(steps),
+            "deadman_active_steps": len(active_steps),
+            "nonzero_command_steps": len(nonzero_steps),
+            "commands_sent": getattr(commander, "commands_sent", 0),
+            "callback_error_count": backend.cache.callback_error_count,
+            "first_input_age_ms": first_step.human_action.input_age_ms,
+            "last_input_age_ms": last.human_action.input_age_ms,
+            "first_robot_state_age_ms": first_step.robot_state.robot_state_age_ms,
+            "last_robot_state_age_ms": last.robot_state.robot_state_age_ms,
+            "last_linear_velocity_m_s": list(last.human_action.linear_velocity_m_s),
+            "start_ee_position_m": first_ee,
+            "last_ee_position_m": last_ee,
+            "delta_ee_mm": delta_ee_mm,
+            "last_requested_ee_position_m": list(last.requested_ee_position_m),
+            "last_joint_target_deg": list(last.executed_action.joint_target_deg or ()),
+            "motion_sent_any": any(step.motion_sent for step in steps),
+            "safety_intervened_any": any(step.executed_action.safety_intervened for step in steps),
+            "safety_reasons": sorted(
+                {reason for step in steps for reason in step.executed_action.safety_reasons}
+            ),
+        }
+        print(json.dumps(summary, indent=2), flush=True)
+    finally:
+        if isinstance(commander, RealManCanfdJointCommander) and commander.commands_sent > 0:
+            try:
+                slow_stop_status = commander.slow_stop()
+                print(json.dumps({"slow_stop_status": slow_stop_status}), flush=True)
+            except Exception as exc:
+                print(json.dumps({"slow_stop_warning": repr(exc)}), flush=True)
+        backend.disconnect()
+        teleop.disconnect()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

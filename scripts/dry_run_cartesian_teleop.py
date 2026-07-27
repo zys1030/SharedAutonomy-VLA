@@ -34,9 +34,12 @@ from sharedautonomy.control.recording import (
     write_effective_config_yaml,
 )
 from sharedautonomy.data import EpisodeRecorder
+from sharedautonomy.data.schema import CoordinateFrame, HumanAction, SampleTimestamp
 from sharedautonomy.devices.spacemouse import HidSpaceMouse, SpaceMouseConfig
 from sharedautonomy.robot.canfd_commander import RealManCanfdJointCommander
+from sharedautonomy.robot.gripper_config import load_serial_soft_gripper_stack
 from sharedautonomy.robot.kinematics import RealManInverseKinematics
+from sharedautonomy.robot.ready_pose import load_ready_pose_config, move_arm_to_ready_joints
 from sharedautonomy.robot.realtime_state import RealManRealtimeStateSource
 from sharedautonomy.robot.safety import CartesianSafetyError, validate_cartesian_segment
 
@@ -144,6 +147,34 @@ def parse_args() -> argparse.Namespace:
         default="Manual Cartesian teleop smoke recording.",
         help="Task description stored in episode metadata",
     )
+    parser.add_argument(
+        "--enable-gripper",
+        action="store_true",
+        help=(
+            "Drive the legacy serial soft gripper on SpaceMouse right-button edges "
+            "(requires motion enabled and configs/local/gripper_serial.local.yaml)"
+        ),
+    )
+    parser.add_argument(
+        "--gripper-config",
+        default=None,
+        help="Optional path to gripper_serial YAML (default: configs/local/gripper_serial.local.yaml)",
+    )
+    parser.add_argument(
+        "--go-to-ready",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Before teleop, move to ready_pose via try_sc-style rm_movej_canfd. "
+            "Default: on when motion is enabled, off for dry-run. "
+            "Matches try_sc move_to_init_on_connect."
+        ),
+    )
+    parser.add_argument(
+        "--ready-config",
+        default=None,
+        help="YAML containing ready_pose (default: configs/collection/manual_cartesian.yaml)",
+    )
     return parser.parse_args()
 
 
@@ -240,6 +271,12 @@ def main() -> int:
 
     if args.record_dir is not None and not args.enable_cameras:
         raise ValueError("--record-dir requires --enable-cameras so each step has synced observations")
+    if args.enable_gripper and not motion_enabled:
+        raise ValueError("--enable-gripper requires motion enabled (--config-enable-motion and --allow-motion)")
+    go_to_ready = bool(motion_enabled) if args.go_to_ready is None else bool(args.go_to_ready)
+    if go_to_ready and not motion_enabled:
+        raise ValueError("--go-to-ready requires motion enabled (--config-enable-motion and --allow-motion)")
+    ready_pose = load_ready_pose_config(config_path=args.ready_config) if go_to_ready else None
 
     workspace, workspace_source = load_cartesian_workspace(args.workspace_yaml)
     teleop = HidSpaceMouse(
@@ -283,7 +320,52 @@ def main() -> int:
     recorder: EpisodeRecorder | None = None
     episode_dir: Path | None = None
     effective_config_path: Path | None = None
+    gripper_device = None
+    gripper_actuator = None
+    gripper_config_source: str | None = None
+    if args.enable_gripper:
+        gripper_device, gripper_actuator, gripper_config_source = load_serial_soft_gripper_stack(
+            config_path=args.gripper_config,
+        )
     try:
+        if ready_pose is not None:
+            print(
+                json.dumps(
+                    {
+                        "go_to_ready": True,
+                        "ready_joints_deg": list(ready_pose.joint_position_deg),
+                        "canfd_follow": ready_pose.canfd_follow,
+                        "canfd_smoothing": ready_pose.canfd_smoothing,
+                        "ready_config_source": ready_pose.source,
+                    },
+                    indent=2,
+                ),
+                flush=True,
+            )
+            move_arm_to_ready_joints(
+                backend.arm,
+                ready_pose.joint_position_deg,
+                follow=ready_pose.canfd_follow,
+                smoothing=ready_pose.canfd_smoothing,
+            )
+            if gripper_actuator is not None and ready_pose.gripper_open_fraction >= 0.5:
+                # Ensure open at episode start when gripper teleop is enabled.
+                gripper_actuator.apply_human_gripper(
+                    HumanAction(
+                        timestamp=SampleTimestamp(
+                            timestamp_utc=datetime.now(tz=UTC),
+                            received_monotonic_ns=time.perf_counter_ns(),
+                        ),
+                        linear_velocity_m_s=(0.0, 0.0, 0.0),
+                        angular_velocity_rad_s=(0.0, 0.0, 0.0),
+                        gripper_target_open_fraction=float(ready_pose.gripper_open_fraction),
+                        deadman_active=False,
+                        input_age_ms=0.0,
+                        reference_frame=CoordinateFrame.BASE,
+                        gripper_button_edge=True,
+                    )
+                )
+
         first = backend.read_snapshot()
         try:
             validate_cartesian_segment(first.ee_position_m, first.ee_position_m, workspace)
@@ -330,6 +412,7 @@ def main() -> int:
             safety_filter=safety,
             inverse_kinematics=inverse_kinematics,
             joint_commander=commander,
+            gripper_actuator=gripper_actuator,
             observation_synchronizer=observation_synchronizer,
         )
 
@@ -361,6 +444,13 @@ def main() -> int:
                         "canfd_smoothing": canfd_smoothing if motion_enabled else None,
                         "workspace_source": workspace_source,
                         "motion_config_source": config_source,
+                        "enable_gripper": bool(args.enable_gripper),
+                        "gripper_config_source": gripper_config_source,
+                        "go_to_ready": go_to_ready,
+                        "ready_config_source": None if ready_pose is None else ready_pose.source,
+                        "ready_joints_deg": (
+                            None if ready_pose is None else list(ready_pose.joint_position_deg)
+                        ),
                     },
                     "task": {
                         "task_id": args.task_id,
@@ -383,7 +473,12 @@ def main() -> int:
         startup_payload = {
             "operator_hint": (
                 "Hold left SpaceMouse button (deadman) and move the cap. "
-                f"Full stick ≈ {move_increment_m * 1000.0:.1f} mm/tick "
+                + (
+                    "Right button toggles gripper open/close (one pulse per press). "
+                    if gripper_actuator is not None
+                    else ""
+                )
+                + f"Full stick ≈ {move_increment_m * 1000.0:.1f} mm/tick "
                 f"({max_speed_m_s * 1000.0:.1f} mm/s). "
                 + (
                     "MOTION ENABLED: keep teach-pendant estop ready; release deadman to stop command stream."
@@ -411,6 +506,8 @@ def main() -> int:
             "motion_config_source": config_source,
             "workspace_source": workspace_source,
             "start_ee_position_m": first_ee,
+            "go_to_ready": go_to_ready,
+            "ready_joints_deg": None if ready_pose is None else list(ready_pose.joint_position_deg),
         }
         if episode_dir is not None:
             startup_payload["record_dir"] = str(episode_dir)
@@ -494,6 +591,9 @@ def main() -> int:
             "deadman_active_steps": len(active_steps),
             "nonzero_command_steps": len(nonzero_steps),
             "commands_sent": getattr(commander, "commands_sent", 0),
+            "gripper_commands_sent": (
+                None if gripper_actuator is None else getattr(gripper_actuator, "commands_sent", 0)
+            ),
             "callback_error_count": backend.cache.callback_error_count,
             "first_input_age_ms": first_step.human_action.input_age_ms,
             "last_input_age_ms": last.human_action.input_age_ms,
@@ -553,6 +653,8 @@ def main() -> int:
             recorder.abort(failure_reason="interrupted", ended_at_utc=datetime.now(tz=UTC))
         if camera_session is not None:
             camera_session.stop()
+        if gripper_device is not None:
+            gripper_device.disconnect()
         if isinstance(commander, RealManCanfdJointCommander) and commander.commands_sent > 0:
             try:
                 slow_stop_status = commander.slow_stop()

@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from enum import IntEnum
 from typing import Any
 
+from sharedautonomy.data.schema import HumanAction
+
 
 class GripperDirection(IntEnum):
     """Direction field used by the legacy serial soft-gripper protocol."""
@@ -186,3 +188,73 @@ class SerialSoftGripper:
         if not 0 <= numeric <= 0xFF:
             raise ValueError(f"{name} must be in [0, 255]")
         return numeric
+
+
+@dataclass(frozen=True, slots=True)
+class SerialSoftGripperTeleopConfig:
+    """Stamp-style open/close pulse parameters for the legacy serial soft gripper."""
+
+    open_angle_deg: float = 1800.0
+    close_angle_deg: float = 1872.0
+    speed_rad_s: float = 20.0
+    initial_open_fraction: float = 1.0
+
+    def __post_init__(self) -> None:
+        for value, name in (
+            (self.open_angle_deg, "open_angle_deg"),
+            (self.close_angle_deg, "close_angle_deg"),
+            (self.speed_rad_s, "speed_rad_s"),
+        ):
+            numeric = float(value)
+            if not math.isfinite(numeric) or numeric <= 0.0:
+                raise ValueError(f"{name} must be a finite positive value")
+        fraction = float(self.initial_open_fraction)
+        if not math.isfinite(fraction) or not 0.0 <= fraction <= 1.0:
+            raise ValueError("initial_open_fraction must be in [0, 1]")
+
+
+class SerialSoftGripperTeleop:
+    """Send one legacy serial pulse per SpaceMouse gripper-button edge.
+
+    Matches the previous stamp setup: right button toggles commanded open fraction;
+    each edge triggers a full open (1800 deg) or close (1872 deg) motion command.
+    No position feedback is available from the hardware.
+    """
+
+    def __init__(
+        self,
+        gripper: SerialSoftGripper,
+        config: SerialSoftGripperTeleopConfig | None = None,
+    ) -> None:
+        self._gripper = gripper
+        self._config = config or SerialSoftGripperTeleopConfig()
+        self._commanded_open_fraction = float(self._config.initial_open_fraction)
+        self.commands_sent = 0
+
+    @property
+    def commanded_open_fraction(self) -> float:
+        return self._commanded_open_fraction
+
+    def apply_human_gripper(self, human_action: HumanAction) -> float:
+        """Act on a gripper-button edge and return the latest commanded open fraction."""
+        if human_action.gripper_button_edge:
+            target = human_action.gripper_target_open_fraction
+            if target is not None:
+                self._commanded_open_fraction = float(target)
+                self._send_for_fraction(self._commanded_open_fraction)
+        return self._commanded_open_fraction
+
+    def _send_for_fraction(self, open_fraction: float) -> None:
+        if open_fraction >= 0.5:
+            self._gripper.send_motion(
+                GripperDirection.OPEN,
+                angle_deg=self._config.open_angle_deg,
+                speed_rad_s=self._config.speed_rad_s,
+            )
+        else:
+            self._gripper.send_motion(
+                GripperDirection.CLOSE,
+                angle_deg=self._config.close_angle_deg,
+                speed_rad_s=self._config.speed_rad_s,
+            )
+        self.commands_sent += 1

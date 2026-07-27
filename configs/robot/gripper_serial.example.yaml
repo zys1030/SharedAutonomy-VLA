@@ -1,0 +1,16 @@
+# Copy to configs/local/gripper_serial.local.yaml and set the COM port.
+# Stamp-verified pulse: open 1800 deg / close 1872 deg at 20 rad/s.
+
+serial:
+  port: COM5
+  baudrate: 115200
+  timeout_s: 0.5
+  response_delay_s: 0.1
+  device_address: 1
+  subdivision: 32
+
+teleop:
+  open_angle_deg: 1800
+  close_angle_deg: 1872
+  speed_rad_s: 20
+  initial_open_fraction: 1.0

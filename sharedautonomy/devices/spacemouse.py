@@ -246,6 +246,7 @@ def spacemouse_axes_to_human_action(
         deadman_active=bool(axes.deadman_active),
         input_age_ms=axes.input_age_ms,
         reference_frame=CoordinateFrame.BASE,
+        gripper_button_edge=bool(axes.gripper_button_edge),
     )
 
 

@@ -120,6 +120,10 @@ class JointCommander(Protocol):
     def send_joint_target(self, joint_target_deg: Sequence[float]) -> None: ...
 
 
+class GripperActuator(Protocol):
+    def apply_human_gripper(self, human_action: HumanAction) -> float | None: ...
+
+
 class SafetyPipeline(Protocol):
     def __call__(
         self,
@@ -244,6 +248,7 @@ class ManualCartesianRunner:
     safety_pipeline: SafetyPipeline
     inverse_kinematics: InverseKinematics = field(default_factory=MockInverseKinematics)
     joint_commander: JointCommander | None = None
+    gripper_actuator: GripperActuator | None = None
     observation_synchronizer: ObservationSynchronizer | None = None
     _step_index: int = field(default=0, init=False, repr=False)
     _last_tick_monotonic_ns: int | None = field(default=None, init=False, repr=False)
@@ -289,7 +294,12 @@ class ManualCartesianRunner:
                 deadman_active=human_action.deadman_active,
                 input_age_ms=human_action.input_age_ms,
                 reference_frame=human_action.reference_frame,
+                gripper_button_edge=human_action.gripper_button_edge,
             )
+
+        commanded_gripper_open_fraction: float | None = None
+        if self.gripper_actuator is not None:
+            commanded_gripper_open_fraction = self.gripper_actuator.apply_human_gripper(human_action)
 
         robot_state = self.robot_state_source.read_cartesian_state(now_monotonic_ns=now_ns)
         synced_observation = None
@@ -303,6 +313,7 @@ class ManualCartesianRunner:
             synced_observation = self.observation_synchronizer.capture(
                 now_monotonic_ns=now_ns,
                 timestamp_utc=stamp,
+                gripper_commanded_open_fraction=commanded_gripper_open_fraction,
             )
         requested_position = integrate_cartesian_velocity(
             robot_state.ee_position_m,
@@ -445,6 +456,7 @@ def build_manual_cartesian_runner(
     safety_filter: CartesianSafetyFilter,
     inverse_kinematics: InverseKinematics | None = None,
     joint_commander: JointCommander | None = None,
+    gripper_actuator: GripperActuator | None = None,
     observation_synchronizer: ObservationSynchronizer | None = None,
 ) -> ManualCartesianRunner:
     """Construct a runner with the Cartesian safety filter already attached."""
@@ -455,5 +467,6 @@ def build_manual_cartesian_runner(
         safety_pipeline=safety_filter,
         inverse_kinematics=inverse_kinematics or MockInverseKinematics(),
         joint_commander=joint_commander,
+        gripper_actuator=gripper_actuator,
         observation_synchronizer=observation_synchronizer,
     )

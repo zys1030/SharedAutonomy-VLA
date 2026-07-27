@@ -174,11 +174,14 @@ class HumanAction:
     deadman_active: bool
     input_age_ms: float
     reference_frame: CoordinateFrame = CoordinateFrame.BASE
+    gripper_button_edge: bool = False
 
     def __post_init__(self) -> None:
         _validate_action_vectors(self)
         if not isinstance(self.deadman_active, bool):
             raise TypeError("deadman_active must be bool")
+        if not isinstance(self.gripper_button_edge, bool):
+            raise TypeError("gripper_button_edge must be bool")
         _validate_non_negative(self.input_age_ms, "input_age_ms")
 
 

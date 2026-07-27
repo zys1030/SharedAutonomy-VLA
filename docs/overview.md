@@ -63,6 +63,8 @@ destination   ∈ {left, right}
 
 共 6 种基础任务，例如：Pick up the red block and place it in the left region.
 
+**当前现场任务卡**（三色 + 三种形状 + A4 UP/DOWN 放置区、拾取区随机化与 6 条英文指令）见 [`tasks/shape_pick_place_v1.md`](tasks/shape_pick_place_v1.md)。
+
 ### 3.2 第一阶段动作空间
 
 ```text

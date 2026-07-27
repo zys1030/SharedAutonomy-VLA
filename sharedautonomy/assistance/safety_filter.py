@@ -66,6 +66,7 @@ class CartesianSafetyLimits:
     """Conservative Cartesian safety defaults for the first-stage runner."""
 
     max_speed_m_s: float = 0.05
+    max_speed_m_s_per_axis: tuple[float, float, float] | None = None
     max_acceleration_m_s2: float = 0.25
     orientation_tolerance_rad: float = 0.05
     input_timeout_s: float = 0.1
@@ -88,6 +89,13 @@ class CartesianSafetyLimits:
             "fixed_ee_rpy_rad",
             tuple(float(value) for value in self.fixed_ee_rpy_rad),
         )
+        if self.max_speed_m_s_per_axis is not None:
+            limits = tuple(float(value) for value in self.max_speed_m_s_per_axis)
+            if len(limits) != 3:
+                raise ValueError("max_speed_m_s_per_axis must contain 3 values")
+            if any(value <= 0.0 for value in limits):
+                raise ValueError("max_speed_m_s_per_axis values must be positive")
+            object.__setattr__(self, "max_speed_m_s_per_axis", limits)
 
 
 @dataclass
@@ -144,6 +152,7 @@ class CartesianSafetyFilter:
             safe_position,
             dt_s=dt_s,
             max_speed_m_s=self.limits.max_speed_m_s,
+            max_speed_m_s_per_axis=self.limits.max_speed_m_s_per_axis,
             previous_velocity_m_s=self._previous_velocity_m_s,
             max_acceleration_m_s2=(
                 None if self._previous_velocity_m_s is None else self.limits.max_acceleration_m_s2

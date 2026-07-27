@@ -7,6 +7,15 @@ from .episode_check import (
     episode_check_report_to_dict,
     format_episode_check_report,
 )
+from .lerobot_export import (
+    LeRobotExportError,
+    build_lerobot_features,
+    build_lerobot_frame,
+    export_lerobot_dataset,
+    export_single_episode,
+    iter_native_frames,
+    load_native_episode_envelope,
+)
 from .recorder import (
     EPISODE_FORMAT,
     EpisodeRecorder,
@@ -67,6 +76,13 @@ __all__ = [
     "check_recorded_episode",
     "episode_check_report_to_dict",
     "format_episode_check_report",
+    "LeRobotExportError",
+    "build_lerobot_features",
+    "build_lerobot_frame",
+    "export_lerobot_dataset",
+    "export_single_episode",
+    "iter_native_frames",
+    "load_native_episode_envelope",
     "load_recorded_episode",
     "proprioceptive_sample_from_cartesian",
     "rpy_rad_to_quaternion_xyzw",

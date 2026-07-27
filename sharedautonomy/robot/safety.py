@@ -74,16 +74,29 @@ def validate_cartesian_segment(
     return target
 
 
+def _clip_per_axis(vector: Sequence[float], max_per_axis: Sequence[float]) -> list[float]:
+    limits = _finite_vector(max_per_axis, "max_per_axis")
+    values = _finite_vector(vector, "vector")
+    if len(limits) != len(values):
+        raise ValueError(f"max_per_axis must contain {len(values)} values, got {len(limits)}")
+    return [max(-limit, min(limit, float(value))) for value, limit in zip(values, limits, strict=True)]
+
+
 def limit_cartesian_target(
     current_position_m: Sequence[float],
     requested_position_m: Sequence[float],
     *,
     dt_s: float,
     max_speed_m_s: float,
+    max_speed_m_s_per_axis: Sequence[float] | None = None,
     previous_velocity_m_s: Sequence[float] | None = None,
     max_acceleration_m_s2: float | None = None,
 ) -> tuple[list[float], list[float]]:
     """Limit a Cartesian target using the measured control interval.
+
+    When ``max_speed_m_s_per_axis`` is set, each velocity component is clipped
+    independently (typical for slower Z / faster XY teleop). Otherwise the
+    legacy vector-norm speed cap is used.
 
     Returns the limited position and the velocity that should be retained for
     the next acceleration-limiting step.
@@ -94,7 +107,13 @@ def limit_cartesian_target(
     max_speed = _positive_finite(max_speed_m_s, "max_speed_m_s")
 
     velocity = [(target - present) / dt for present, target in zip(current, requested, strict=True)]
-    velocity = _limit_vector_norm(velocity, max_speed)
+    if max_speed_m_s_per_axis is not None:
+        speed_limits = _cartesian_position(max_speed_m_s_per_axis, "max_speed_m_s_per_axis")
+        for limit in speed_limits:
+            _positive_finite(limit, "max_speed_m_s_per_axis item")
+        velocity = _clip_per_axis(velocity, speed_limits)
+    else:
+        velocity = _limit_vector_norm(velocity, max_speed)
 
     if (previous_velocity_m_s is None) != (max_acceleration_m_s2 is None):
         raise ValueError(
@@ -107,12 +126,21 @@ def limit_cartesian_target(
             requested_velocity - previous_velocity
             for previous_velocity, requested_velocity in zip(previous, velocity, strict=True)
         ]
-        limited_delta = _limit_vector_norm(delta_velocity, max_acceleration * dt)
+        if max_speed_m_s_per_axis is not None:
+            accel_limits = [
+                max(limit / dt, limit / 0.2) for limit in speed_limits
+            ]
+            limited_delta = _clip_per_axis(delta_velocity, [value * dt for value in accel_limits])
+        else:
+            limited_delta = _limit_vector_norm(delta_velocity, max_acceleration * dt)
         velocity = [
             previous_velocity + velocity_delta
             for previous_velocity, velocity_delta in zip(previous, limited_delta, strict=True)
         ]
-        velocity = _limit_vector_norm(velocity, max_speed)
+        if max_speed_m_s_per_axis is not None:
+            velocity = _clip_per_axis(velocity, speed_limits)
+        else:
+            velocity = _limit_vector_norm(velocity, max_speed)
 
     target = [
         present + limited_velocity * dt for present, limited_velocity in zip(current, velocity, strict=True)

@@ -55,7 +55,8 @@ safety:
 # micro-steps. 10 Hz matched try_sc feel, low-follow CAN-FD, and smaller episodes.
 collection_teleop:
   control_rate_hz: 10.0
-  move_increment_m: 0.01
+  move_increment_z_m: 0.01
+  move_increment_xy_m: 0.02
   max_joint_rate_deg_s: 50.0
   canfd_follow: false
   canfd_smoothing: 50
@@ -67,13 +68,16 @@ collection_teleop:
   notes: "Prefer 10 Hz collection unless a later ACT ablation shows benefit from denser actions."
 
 # Episode start pose for shape_pick_place_v1 (2026-07-27).
-# Teleop with motion enabled moves here via try_sc-style rm_movej_canfd
-# (follow=false, radio=50) before the Cartesian loop. Tip is ~3–5 cm
-# laterally off pick-zone center; tip clearance to table is >150 mm.
+# One try_sc-style rm_movej_canfd, then settle_s before Cartesian teleop so hold
+# commands do not cancel the go-to-ready move. Tip ~3-5 cm off pick-zone center;
+# tip clearance to table >150 mm.
 ready_pose:
   joint_position_deg: [0.0, 0.0, 90.0, 0.0, 90.0, 0.0]
-  gripper_open_fraction: 1.0
+  # 1.0 = use gripper_serial teleop.working_open_fraction at ready. Values <1
+  # override ready open only (teleop re-open still uses working_open_fraction).
+  gripper_open_fraction: 0.6
   canfd_follow: false
   canfd_smoothing: 50
+  settle_s: 2.0
   task_id: shape_pick_place_v1
   notes: "Auto go-to-ready on teleop start when motion is enabled; matches try_sc init."

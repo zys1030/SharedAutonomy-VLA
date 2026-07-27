@@ -14,3 +14,5 @@ teleop:
   close_angle_deg: 1872
   speed_rad_s: 20
   initial_open_fraction: 1.0
+  # Physical open level for ready pose and every SpaceMouse re-open (0.5–0.7 typical).
+  working_open_fraction: 0.65

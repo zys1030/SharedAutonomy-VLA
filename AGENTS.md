@@ -14,6 +14,7 @@
 ## AI 协作约定
 
 - **默认不预读** `docs/roadmap.md`、当日或上一日 `plan.md` / `log.md`，除非用户要求安排当天任务、收尾整理，或明确 @ 了这些文件。
+- **收工整理 `log.md` 时**：按 [`docs/daily/templates/log.md`](docs/daily/templates/log.md) 填写，**必须包含「今日理解重点」**（通常 3–5 条；轻量日可 2–3 条，不可省略整节）及文末「自测参考答案」；细则见 [`docs/daily/README.md`](docs/daily/README.md)。
 - 问答、评审、方案讨论优先 **Ask**；需要改代码时再用 **Agent**。
 - 探索范围优先由用户 `@` 文件或目录限定；无指定时只读直接相关的模块，避免全仓扫描。
 - 验证默认 `pytest -m core`；全量 `pytest` 仅在用户要求、改 schema/夹爪、或真机联调前运行。

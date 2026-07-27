@@ -29,15 +29,18 @@ class _FakeArm:
 def test_load_ready_pose_from_manual_cartesian_yaml() -> None:
     config = load_ready_pose_config()
     assert config.joint_position_deg == (0.0, 0.0, 90.0, 0.0, 90.0, 0.0)
-    assert config.gripper_open_fraction == 1.0
+    assert config.gripper_open_fraction == 0.6
     assert config.canfd_follow is False
     assert config.canfd_smoothing == 50
+    assert config.settle_s == 2.0
     assert "manual_cartesian.yaml" in config.source.replace("\\", "/")
 
 
 def test_move_arm_to_ready_joints_matches_try_sc_canfd() -> None:
     arm = _FakeArm()
-    joints = move_arm_to_ready_joints(arm, [0, 0, 90, 0, 90, 0], follow=False, smoothing=50)
+    joints = move_arm_to_ready_joints(
+        arm, [0, 0, 90, 0, 90, 0], follow=False, smoothing=50, settle_s=0.0
+    )
     assert joints == [0.0, 0.0, 90.0, 0.0, 90.0, 0.0]
     assert arm.calls == [([0.0, 0.0, 90.0, 0.0, 90.0, 0.0], False, 0, 0, 50)]
 

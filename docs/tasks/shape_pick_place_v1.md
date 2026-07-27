@@ -123,6 +123,7 @@ destination_id ∈ {up, down}
 | `joint_position_deg` | `[0, 0, 90, 0, 90, 0]` |
 | `gripper_open_fraction` | `1.0`（完全张开） |
 | `canfd_follow` / `canfd_smoothing` | `false` / `50`（与 try_sc `rm_movej_canfd` 一致） |
+| `settle_s` | `2.0`（发令后等待，避免 teleop 立刻 hold 顶掉到位） |
 | 姿态 | 夹爪竖直向下；到位后 teleop 冻结该姿态的 RPY |
 | 净空 | 夹爪尖端距桌面 **> 150 mm** |
 | XY | 大致在拾取区上方即可；相对中心横向偏 **3–5 cm** 可接受 |

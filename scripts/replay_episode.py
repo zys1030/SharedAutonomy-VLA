@@ -172,6 +172,8 @@ class EpisodeReplayViewer:
         self.ax_ee.set_xlim(*_axis_limits(xs))
         self.ax_ee.set_ylim(*_axis_limits(ys))
         self.ax_ee.set_zlim(*_axis_limits(zs))
+        # Base frame view: +X into screen, +Y left, +Z up.
+        self.ax_ee.view_init(elev=30, azim=180)
         self.ax_ee.legend(loc="upper left", fontsize=8)
 
     def _configure_title(self) -> None:

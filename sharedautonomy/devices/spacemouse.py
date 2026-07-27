@@ -64,6 +64,8 @@ class SpaceMouseConfig:
 
     deadzone: float = 0.1
     max_linear_speed_m_s: float = 0.05
+    max_linear_speed_xy_m_s: float | None = None
+    max_linear_speed_z_m_s: float | None = None
     max_angular_speed_rad_s: float = 0.4
     mount_orientation: str = "vertical_up"
     translation_transform: Sequence[Sequence[float]] | None = None
@@ -85,6 +87,12 @@ class SpaceMouseConfig:
             raise ValueError("deadzone must be in [0, 1)")
         if float(self.max_linear_speed_m_s) <= 0.0:
             raise ValueError("max_linear_speed_m_s must be positive")
+        for value, name in (
+            (self.max_linear_speed_xy_m_s, "max_linear_speed_xy_m_s"),
+            (self.max_linear_speed_z_m_s, "max_linear_speed_z_m_s"),
+        ):
+            if value is not None and float(value) <= 0.0:
+                raise ValueError(f"{name} must be positive when set")
         if float(self.max_angular_speed_rad_s) <= 0.0:
             raise ValueError("max_angular_speed_rad_s must be positive")
         if float(self.input_timeout_s) <= 0.0:
@@ -229,7 +237,21 @@ def spacemouse_axes_to_human_action(
         linear = (0.0, 0.0, 0.0)
         angular = (0.0, 0.0, 0.0)
     else:
-        linear = tuple(float(value) * config.max_linear_speed_m_s for value in axes.translation)
+        xy_speed = (
+            float(config.max_linear_speed_xy_m_s)
+            if config.max_linear_speed_xy_m_s is not None
+            else float(config.max_linear_speed_m_s)
+        )
+        z_speed = (
+            float(config.max_linear_speed_z_m_s)
+            if config.max_linear_speed_z_m_s is not None
+            else float(config.max_linear_speed_m_s)
+        )
+        linear = (
+            float(axes.translation[0]) * xy_speed,
+            float(axes.translation[1]) * xy_speed,
+            float(axes.translation[2]) * z_speed,
+        )
         if config.allow_rotation:
             angular = tuple(float(value) * config.max_angular_speed_rad_s for value in axes.rotation)
         else:

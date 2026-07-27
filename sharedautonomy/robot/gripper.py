@@ -197,7 +197,11 @@ class SerialSoftGripperTeleopConfig:
     open_angle_deg: float = 1800.0
     close_angle_deg: float = 1872.0
     speed_rad_s: float = 20.0
+    # Logical open level at episode start (metadata only until the first pulse).
     initial_open_fraction: float = 1.0
+    # Physical open travel for every "open" pulse (ready + SpaceMouse re-open).
+    # 1.0 keeps stamp full open (1800 deg); 0.5–0.7 is easier for rotary grippers.
+    working_open_fraction: float = 1.0
 
     def __post_init__(self) -> None:
         for value, name in (
@@ -208,17 +212,21 @@ class SerialSoftGripperTeleopConfig:
             numeric = float(value)
             if not math.isfinite(numeric) or numeric <= 0.0:
                 raise ValueError(f"{name} must be a finite positive value")
-        fraction = float(self.initial_open_fraction)
-        if not math.isfinite(fraction) or not 0.0 <= fraction <= 1.0:
-            raise ValueError("initial_open_fraction must be in [0, 1]")
+        for value, name in (
+            (self.initial_open_fraction, "initial_open_fraction"),
+            (self.working_open_fraction, "working_open_fraction"),
+        ):
+            fraction = float(value)
+            if not math.isfinite(fraction) or not 0.0 <= fraction <= 1.0:
+                raise ValueError(f"{name} must be in [0, 1]")
 
 
 class SerialSoftGripperTeleop:
     """Send one legacy serial pulse per SpaceMouse gripper-button edge.
 
-    Matches the previous stamp setup: right button toggles commanded open fraction;
-    each edge triggers a full open (1800 deg) or close (1872 deg) motion command.
-    No position feedback is available from the hardware.
+    Right button toggles logical open/close. Each open pulse uses
+    ``working_open_fraction`` of the configured open travel (not always full
+    1800 deg). Close always uses the full close pulse. No position feedback.
     """
 
     def __init__(
@@ -228,8 +236,13 @@ class SerialSoftGripperTeleop:
     ) -> None:
         self._gripper = gripper
         self._config = config or SerialSoftGripperTeleopConfig()
-        self._commanded_open_fraction = float(self._config.initial_open_fraction)
+        initial = float(self._config.initial_open_fraction)
+        self._commanded_open_fraction = 1.0 if initial >= 0.5 else 0.0
         self.commands_sent = 0
+
+    @property
+    def working_open_fraction(self) -> float:
+        return float(self._config.working_open_fraction)
 
     @property
     def commanded_open_fraction(self) -> float:
@@ -240,21 +253,81 @@ class SerialSoftGripperTeleop:
         if human_action.gripper_button_edge:
             target = human_action.gripper_target_open_fraction
             if target is not None:
-                self._commanded_open_fraction = float(target)
-                self._send_for_fraction(self._commanded_open_fraction)
+                self._send_for_fraction(float(target))
         return self._commanded_open_fraction
+
+    def open_to_fraction(self, physical_open_fraction: float) -> float:
+        """Command a single physical open/close pulse without a SpaceMouse edge.
+
+        Prefer ``move_to_working_open`` at episode ready: this gripper only
+        accepts relative rotation pulses, so opening from an unknown state can
+        look fully open even when a partial angle is sent.
+        """
+        fraction = max(0.0, min(1.0, float(physical_open_fraction)))
+        if fraction <= 0.0:
+            self._pulse_close()
+            self._commanded_open_fraction = 0.0
+        else:
+            self._pulse_open(fraction)
+            self._commanded_open_fraction = 1.0
+        self.commands_sent += 1
+        return self._commanded_open_fraction
+
+    def move_to_working_open(self, physical_open_fraction: float | None = None) -> tuple[float, float]:
+        """Close fully, settle, then open to a known partial level.
+
+        Returns ``(close_angle_deg, open_angle_deg)`` for logging. Use at ready
+        pose so every episode starts from the same jaw height.
+        """
+        fraction = max(
+            0.0,
+            min(
+                1.0,
+                float(self._config.working_open_fraction if physical_open_fraction is None else physical_open_fraction),
+            ),
+        )
+        self._pulse_close()
+        self._settle_after_pulse()
+        open_angle_deg = 0.0
+        if fraction > 0.0:
+            open_angle_deg = self._open_pulse_angle_deg(fraction)
+            self._pulse_open(fraction)
+            self._commanded_open_fraction = 1.0
+        else:
+            self._commanded_open_fraction = 0.0
+        self.commands_sent += 2
+        return float(self._config.close_angle_deg), open_angle_deg
+
+    def _settle_after_pulse(self) -> None:
+        delay = float(self._gripper.config.response_delay_s)
+        if delay > 0.0:
+            time.sleep(delay)
+
+    def _open_pulse_angle_deg(self, physical_open_fraction: float) -> float:
+        fraction = max(0.0, min(1.0, float(physical_open_fraction)))
+        if fraction >= 1.0:
+            return float(self._config.open_angle_deg)
+        return fraction * float(self._config.open_angle_deg)
+
+    def _pulse_open(self, physical_open_fraction: float) -> None:
+        self._gripper.send_motion(
+            GripperDirection.OPEN,
+            angle_deg=self._open_pulse_angle_deg(physical_open_fraction),
+            speed_rad_s=self._config.speed_rad_s,
+        )
+
+    def _pulse_close(self) -> None:
+        self._gripper.send_motion(
+            GripperDirection.CLOSE,
+            angle_deg=self._config.close_angle_deg,
+            speed_rad_s=self._config.speed_rad_s,
+        )
 
     def _send_for_fraction(self, open_fraction: float) -> None:
         if open_fraction >= 0.5:
-            self._gripper.send_motion(
-                GripperDirection.OPEN,
-                angle_deg=self._config.open_angle_deg,
-                speed_rad_s=self._config.speed_rad_s,
-            )
+            self._pulse_open(self._config.working_open_fraction)
+            self._commanded_open_fraction = 1.0
         else:
-            self._gripper.send_motion(
-                GripperDirection.CLOSE,
-                angle_deg=self._config.close_angle_deg,
-                speed_rad_s=self._config.speed_rad_s,
-            )
+            self._pulse_close()
+            self._commanded_open_fraction = 0.0
         self.commands_sent += 1

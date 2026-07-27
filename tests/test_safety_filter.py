@@ -130,6 +130,18 @@ def test_limit_cartesian_target_limits_acceleration() -> None:
     assert velocity == pytest.approx([0.01, 0, 0])
 
 
+def test_limit_cartesian_target_per_axis_clips_xy_and_z_independently() -> None:
+    target, velocity = limit_cartesian_target(
+        [0, 0, 0],
+        [1, 1, 1],
+        dt_s=0.1,
+        max_speed_m_s=0.2,
+        max_speed_m_s_per_axis=(0.2, 0.2, 0.1),
+    )
+    assert velocity == pytest.approx([0.2, 0.2, 0.1])
+    assert target == pytest.approx([0.02, 0.02, 0.01])
+
+
 def test_fixed_orientation_handles_wrapped_angles() -> None:
     validate_fixed_orientation(
         [0, 0, math.pi],

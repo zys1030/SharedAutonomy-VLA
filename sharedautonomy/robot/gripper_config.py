@@ -65,6 +65,7 @@ def load_serial_soft_gripper_stack(
         close_angle_deg=float((teleop_payload or {}).get("close_angle_deg", 1872.0)),
         speed_rad_s=float((teleop_payload or {}).get("speed_rad_s", 20.0)),
         initial_open_fraction=float((teleop_payload or {}).get("initial_open_fraction", 1.0)),
+        working_open_fraction=float((teleop_payload or {}).get("working_open_fraction", 1.0)),
     )
     gripper.connect()
     return gripper, SerialSoftGripperTeleop(gripper, teleop_config), str(path)

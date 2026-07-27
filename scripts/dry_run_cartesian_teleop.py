@@ -53,7 +53,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--ip", required=True, help="RM-65B controller IP address")
     parser.add_argument("--port", type=int, default=8080)
-    parser.add_argument("--duration-s", type=float, default=20.0)
+    parser.add_argument("--duration-s", type=float, default=40.0)
     parser.add_argument("--steps", type=int, default=None)
     parser.add_argument(
         "--control-hz",
@@ -148,6 +148,16 @@ def parse_args() -> argparse.Namespace:
         help="Task description stored in episode metadata",
     )
     parser.add_argument(
+        "--source-object",
+        default=None,
+        help="Object to pick, stored as episode metadata source_object (task card object_id, e.g. red)",
+    )
+    parser.add_argument(
+        "--destination",
+        default=None,
+        help="Placement target, stored as episode metadata destination (task card destination_id, e.g. up)",
+    )
+    parser.add_argument(
         "--enable-gripper",
         action="store_true",
         help=(
@@ -175,11 +185,27 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="YAML containing ready_pose (default: configs/collection/manual_cartesian.yaml)",
     )
+    parser.add_argument(
+        "--end-on-gripper-release",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "End the episode after a grasp (gripper close) followed by release (open). "
+            "Default: on when --enable-gripper is set. --duration-s remains the max cap."
+        ),
+    )
+    parser.add_argument(
+        "--post-release-s",
+        type=float,
+        default=1.0,
+        help="Keep recording this many seconds after gripper release before finalizing",
+    )
     return parser.parse_args()
 
 
 _DEFAULT_DRY_RUN_SPEED_M_S = 0.05
 _DEFAULT_MOTION_MOVE_INCREMENT_M = 0.01  # try_sc robot_arm.yaml action_limit_m
+_DEFAULT_MOTION_MOVE_INCREMENT_XY_SCALE = 2.0
 _DEFAULT_DRY_RUN_CONTROL_HZ = 50.0
 _DEFAULT_MOTION_CONTROL_HZ = 10.0
 _MIN_INPUT_TIMEOUT_S = 0.1
@@ -230,31 +256,48 @@ def main() -> int:
 
     if args.max_linear_speed_m_s is not None and args.move_increment_m is not None:
         raise ValueError("Pass only one of --max-linear-speed-m-s or --move-increment-m")
-    move_increment_m: float | None
+    move_increment_m: float
+    move_increment_xy_m: float
+    move_increment_z_m: float
+    max_speed_m_s_per_axis: tuple[float, float, float] | None = None
     speed_source: str
     if args.max_linear_speed_m_s is not None:
         max_speed_m_s = float(args.max_linear_speed_m_s)
         move_increment_m = max_speed_m_s * period_s
+        move_increment_xy_m = move_increment_m
+        move_increment_z_m = move_increment_m
         speed_source = "cli --max-linear-speed-m-s"
     elif motion_enabled:
         if args.move_increment_m is None:
-            move_increment_m = _DEFAULT_MOTION_MOVE_INCREMENT_M
+            move_increment_z_m = _DEFAULT_MOTION_MOVE_INCREMENT_M
             speed_source = "default_motion_move_increment_0.01"
         else:
-            move_increment_m = float(args.move_increment_m)
+            move_increment_z_m = float(args.move_increment_m)
             speed_source = "cli --move-increment-m"
-        if move_increment_m <= 0.0:
+        if move_increment_z_m <= 0.0:
             raise ValueError("move-increment-m must be positive")
-        # Velocity pipeline: full stick advances move_increment_m each tick.
-        max_speed_m_s = move_increment_m / period_s
+        move_increment_xy_m = _DEFAULT_MOTION_MOVE_INCREMENT_XY_SCALE * move_increment_z_m
+        move_increment_m = move_increment_z_m
+        max_speed_xy_m_s = move_increment_xy_m / period_s
+        max_speed_z_m_s = move_increment_z_m / period_s
+        max_speed_m_s_per_axis = (max_speed_xy_m_s, max_speed_xy_m_s, max_speed_z_m_s)
+        max_speed_m_s = max(max_speed_m_s_per_axis)
+        speed_source = f"{speed_source}; xy={_DEFAULT_MOTION_MOVE_INCREMENT_XY_SCALE}x z"
     else:
         max_speed_m_s = _DEFAULT_DRY_RUN_SPEED_M_S
         move_increment_m = max_speed_m_s * period_s
+        move_increment_xy_m = move_increment_m
+        move_increment_z_m = move_increment_m
         speed_source = "default_dry_run_0.05"
     if max_speed_m_s <= 0.0:
         raise ValueError("max-linear-speed-m-s must be positive")
     # Reach the speed cap in about one control period (try_sc has no separate accel ramp).
-    max_acceleration_m_s2 = max(max_speed_m_s / period_s, max_speed_m_s / 0.2)
+    if max_speed_m_s_per_axis is not None:
+        max_acceleration_m_s2 = max(
+            max(limit / period_s, limit / 0.2) for limit in max_speed_m_s_per_axis
+        )
+    else:
+        max_acceleration_m_s2 = max(max_speed_m_s / period_s, max_speed_m_s / 0.2)
     # At 10 Hz, 100 ms input timeout sits on the period boundary and can false-trigger stale holds.
     input_timeout_s = max(_MIN_INPUT_TIMEOUT_S, 2.0 * period_s)
     robot_state_timeout_s = max(_MIN_ROBOT_STATE_TIMEOUT_S, 0.5 * period_s)
@@ -273,16 +316,32 @@ def main() -> int:
         raise ValueError("--record-dir requires --enable-cameras so each step has synced observations")
     if args.enable_gripper and not motion_enabled:
         raise ValueError("--enable-gripper requires motion enabled (--config-enable-motion and --allow-motion)")
+    end_on_gripper_release = (
+        bool(args.enable_gripper) if args.end_on_gripper_release is None else bool(args.end_on_gripper_release)
+    )
+    if end_on_gripper_release and not args.enable_gripper:
+        raise ValueError("--end-on-gripper-release requires --enable-gripper")
+    post_release_s = float(args.post_release_s)
+    if post_release_s < 0.0:
+        raise ValueError("post-release-s must be >= 0")
     go_to_ready = bool(motion_enabled) if args.go_to_ready is None else bool(args.go_to_ready)
     if go_to_ready and not motion_enabled:
         raise ValueError("--go-to-ready requires motion enabled (--config-enable-motion and --allow-motion)")
     ready_pose = load_ready_pose_config(config_path=args.ready_config) if go_to_ready else None
 
     workspace, workspace_source = load_cartesian_workspace(args.workspace_yaml)
+    max_speed_xy_m_s = (
+        max_speed_m_s_per_axis[0] if max_speed_m_s_per_axis is not None else max_speed_m_s
+    )
+    max_speed_z_m_s = (
+        max_speed_m_s_per_axis[2] if max_speed_m_s_per_axis is not None else max_speed_m_s
+    )
     teleop = HidSpaceMouse(
         SpaceMouseConfig(
             deadzone=args.deadzone,
             max_linear_speed_m_s=max_speed_m_s,
+            max_linear_speed_xy_m_s=max_speed_xy_m_s if max_speed_m_s_per_axis is not None else None,
+            max_linear_speed_z_m_s=max_speed_z_m_s if max_speed_m_s_per_axis is not None else None,
             mount_orientation="vertical_up",
             base_xy_yaw_deg=float(args.xy_yaw_deg),
             lock_z=bool(args.lock_z),
@@ -336,6 +395,7 @@ def main() -> int:
                         "ready_joints_deg": list(ready_pose.joint_position_deg),
                         "canfd_follow": ready_pose.canfd_follow,
                         "canfd_smoothing": ready_pose.canfd_smoothing,
+                        "settle_s": ready_pose.settle_s,
                         "ready_config_source": ready_pose.source,
                     },
                     indent=2,
@@ -347,23 +407,29 @@ def main() -> int:
                 ready_pose.joint_position_deg,
                 follow=ready_pose.canfd_follow,
                 smoothing=ready_pose.canfd_smoothing,
+                settle_s=ready_pose.settle_s,
             )
-            if gripper_actuator is not None and ready_pose.gripper_open_fraction >= 0.5:
-                # Ensure open at episode start when gripper teleop is enabled.
-                gripper_actuator.apply_human_gripper(
-                    HumanAction(
-                        timestamp=SampleTimestamp(
-                            timestamp_utc=datetime.now(tz=UTC),
-                            received_monotonic_ns=time.perf_counter_ns(),
-                        ),
-                        linear_velocity_m_s=(0.0, 0.0, 0.0),
-                        angular_velocity_rad_s=(0.0, 0.0, 0.0),
-                        gripper_target_open_fraction=float(ready_pose.gripper_open_fraction),
-                        deadman_active=False,
-                        input_age_ms=0.0,
-                        reference_frame=CoordinateFrame.BASE,
-                        gripper_button_edge=True,
-                    )
+            if gripper_actuator is not None:
+                ready_physical = float(ready_pose.gripper_open_fraction)
+                if ready_physical >= 1.0:
+                    ready_physical = gripper_actuator.working_open_fraction
+                close_angle_deg, open_angle_deg = gripper_actuator.move_to_working_open(
+                    ready_physical if ready_physical > 0.0 else 0.0
+                )
+                print(
+                    json.dumps(
+                        {
+                            "gripper_ready": {
+                                "physical_open_fraction": ready_physical,
+                                "close_pulse_angle_deg": close_angle_deg,
+                                "open_pulse_angle_deg": open_angle_deg,
+                                "working_open_fraction": gripper_actuator.working_open_fraction,
+                                "gripper_config_source": gripper_config_source,
+                            }
+                        },
+                        indent=2,
+                    ),
+                    flush=True,
                 )
 
         first = backend.read_snapshot()
@@ -387,6 +453,7 @@ def main() -> int:
             workspace=workspace,
             limits=CartesianSafetyLimits(
                 max_speed_m_s=max_speed_m_s,
+                max_speed_m_s_per_axis=max_speed_m_s_per_axis,
                 max_acceleration_m_s2=max_acceleration_m_s2,
                 fixed_ee_rpy_rad=fixed_rpy,
                 input_timeout_s=input_timeout_s,
@@ -435,7 +502,14 @@ def main() -> int:
                         "duration_s": duration_s,
                         "planned_steps": total_steps,
                         "move_increment_m": move_increment_m,
+                        "move_increment_xy_m": move_increment_xy_m,
+                        "move_increment_z_m": move_increment_z_m,
                         "max_linear_speed_m_s": max_speed_m_s,
+                        "max_linear_speed_xy_m_s": max_speed_xy_m_s,
+                        "max_linear_speed_z_m_s": max_speed_z_m_s,
+                        "max_speed_m_s_per_axis": (
+                            None if max_speed_m_s_per_axis is None else list(max_speed_m_s_per_axis)
+                        ),
                         "xy_yaw_deg": float(args.xy_yaw_deg),
                         "lock_z": bool(args.lock_z),
                         "hold_flange_z_m": hold_flange_z_m,
@@ -446,6 +520,8 @@ def main() -> int:
                         "motion_config_source": config_source,
                         "enable_gripper": bool(args.enable_gripper),
                         "gripper_config_source": gripper_config_source,
+                        "end_on_gripper_release": end_on_gripper_release,
+                        "post_release_s": post_release_s,
                         "go_to_ready": go_to_ready,
                         "ready_config_source": None if ready_pose is None else ready_pose.source,
                         "ready_joints_deg": (
@@ -455,6 +531,8 @@ def main() -> int:
                     "task": {
                         "task_id": args.task_id,
                         "task_text": args.task_text,
+                        "source_object": args.source_object,
+                        "destination": args.destination,
                     },
                 },
             )
@@ -465,6 +543,8 @@ def main() -> int:
                     run_id=run_id,
                     task_id=args.task_id,
                     task_text=args.task_text,
+                    source_object=args.source_object,
+                    destination=args.destination,
                     control_rate_hz=control_hz,
                     effective_config_path=effective_config_path.as_posix(),
                 )
@@ -475,11 +555,24 @@ def main() -> int:
                 "Hold left SpaceMouse button (deadman) and move the cap. "
                 + (
                     "Right button toggles gripper open/close (one pulse per press). "
+                    + (
+                        "Episode ends shortly after you release the object (open after a grasp); "
+                        f"{duration_s:.0f}s is the max duration. "
+                        if end_on_gripper_release
+                        else ""
+                    )
                     if gripper_actuator is not None
                     else ""
                 )
-                + f"Full stick ≈ {move_increment_m * 1000.0:.1f} mm/tick "
-                f"({max_speed_m_s * 1000.0:.1f} mm/s). "
+                + (
+                    f"Full stick ≈ {move_increment_xy_m * 1000.0:.1f} mm/tick XY "
+                    f"({max_speed_xy_m_s * 1000.0:.1f} mm/s), "
+                    f"{move_increment_z_m * 1000.0:.1f} mm/tick Z "
+                    f"({max_speed_z_m_s * 1000.0:.1f} mm/s). "
+                    if max_speed_m_s_per_axis is not None
+                    else f"Full stick ≈ {move_increment_m * 1000.0:.1f} mm/tick "
+                    f"({max_speed_m_s * 1000.0:.1f} mm/s). "
+                )
                 + (
                     "MOTION ENABLED: keep teach-pendant estop ready; release deadman to stop command stream."
                     if motion_enabled
@@ -492,7 +585,11 @@ def main() -> int:
             "enable_motion": motion_enabled,
             "enable_cameras": bool(args.enable_cameras),
             "move_increment_mm": round(float(move_increment_m) * 1000.0, 3),
+            "move_increment_xy_mm": round(float(move_increment_xy_m) * 1000.0, 3),
+            "move_increment_z_mm": round(float(move_increment_z_m) * 1000.0, 3),
             "max_linear_speed_mm_s": round(max_speed_m_s * 1000.0, 3),
+            "max_linear_speed_xy_mm_s": round(max_speed_xy_m_s * 1000.0, 3),
+            "max_linear_speed_z_mm_s": round(max_speed_z_m_s * 1000.0, 3),
             "max_linear_speed_source": speed_source,
             "xy_yaw_deg": float(args.xy_yaw_deg),
             "lock_z": bool(args.lock_z),
@@ -508,6 +605,8 @@ def main() -> int:
             "start_ee_position_m": first_ee,
             "go_to_ready": go_to_ready,
             "ready_joints_deg": None if ready_pose is None else list(ready_pose.joint_position_deg),
+            "end_on_gripper_release": end_on_gripper_release,
+            "post_release_s": post_release_s,
         }
         if episode_dir is not None:
             startup_payload["record_dir"] = str(episode_dir)
@@ -518,6 +617,9 @@ def main() -> int:
         started_ns = time.perf_counter_ns()
         next_progress_s = 5.0
         abort_reason: str | None = None
+        end_trigger: str | None = None
+        grasp_seen = False
+        post_release_deadline_ns: int | None = None
         for index in range(total_steps):
             now_ns = time.perf_counter_ns()
             try:
@@ -529,6 +631,26 @@ def main() -> int:
             steps.append(step)
             if recorder is not None:
                 record_cartesian_control_step(recorder, step)
+
+            if end_on_gripper_release and step.human_action.gripper_button_edge:
+                target = step.human_action.gripper_target_open_fraction
+                if target is not None:
+                    if float(target) < 0.5:
+                        grasp_seen = True
+                    elif grasp_seen and post_release_deadline_ns is None:
+                        end_trigger = "gripper_release"
+                        post_release_deadline_ns = now_ns + int(post_release_s * 1_000_000_000)
+                        print(
+                            json.dumps(
+                                {
+                                    "end_trigger": end_trigger,
+                                    "post_release_s": post_release_s,
+                                    "steps_done": index + 1,
+                                }
+                            ),
+                            flush=True,
+                        )
+
             elapsed_s = (time.perf_counter_ns() - started_ns) / 1_000_000_000
             if elapsed_s >= next_progress_s:
                 progress_payload = {
@@ -548,8 +670,15 @@ def main() -> int:
                     progress_payload["sync_warnings"] = list(step.synced_observation.warnings)
                 print(json.dumps(progress_payload), flush=True)
                 next_progress_s += 5.0
+
+            if post_release_deadline_ns is not None and now_ns >= post_release_deadline_ns:
+                break
+
             if index + 1 < total_steps:
                 time.sleep(period_s)
+
+        if end_trigger is None and not abort_reason and steps:
+            end_trigger = "max_duration"
 
         if not steps:
             if recorder is not None and recorder.is_recording:
@@ -579,13 +708,18 @@ def main() -> int:
         summary = {
             "status": "aborted" if abort_reason else "ok",
             "abort_reason": abort_reason,
+            "end_trigger": end_trigger,
             "enable_motion": motion_enabled,
             "enable_cameras": bool(args.enable_cameras),
             "teleop": "hid_spacemouse",
             "workspace_source": workspace_source,
             "motion_config_source": config_source,
             "move_increment_mm": round(float(move_increment_m) * 1000.0, 3),
+            "move_increment_xy_mm": round(float(move_increment_xy_m) * 1000.0, 3),
+            "move_increment_z_mm": round(float(move_increment_z_m) * 1000.0, 3),
             "max_linear_speed_mm_s": round(max_speed_m_s * 1000.0, 3),
+            "max_linear_speed_xy_mm_s": round(max_speed_xy_m_s * 1000.0, 3),
+            "max_linear_speed_z_mm_s": round(max_speed_z_m_s * 1000.0, 3),
             "duration_s": round((time.perf_counter_ns() - started_ns) / 1_000_000_000, 3),
             "steps": len(steps),
             "deadman_active_steps": len(active_steps),

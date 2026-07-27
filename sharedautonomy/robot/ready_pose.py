@@ -1,12 +1,13 @@
 """Load and execute the collection ready / initial joint pose.
 
-try_sc moves to ``init_state`` on connect and again on ``reset`` via a single
-``rm_movej_canfd(follow=False, radio=50)`` call. This module does the same
-bring-up step before the SharedAutonomy Cartesian teleop loop starts.
+try_sc moves to ``init_state`` with one ``rm_movej_canfd(follow=False, radio=50)``.
+That call is non-blocking, so after sending we wait ``settle_s`` before teleop
+starts holding the current pose (which would otherwise cancel the move).
 """
 
 from __future__ import annotations
 
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,7 @@ class ReadyPoseConfig:
     gripper_open_fraction: float = 1.0
     canfd_follow: bool = False
     canfd_smoothing: int = 50
+    settle_s: float = 2.0
     task_id: str | None = None
     notes: str | None = None
     source: str = ""
@@ -39,10 +41,14 @@ class ReadyPoseConfig:
         smoothing = int(self.canfd_smoothing)
         if smoothing < 0:
             raise ValueError("canfd_smoothing must be >= 0")
+        settle = float(self.settle_s)
+        if not (settle == settle) or settle < 0.0:
+            raise ValueError("settle_s must be a finite non-negative value")
         object.__setattr__(self, "joint_position_deg", joints)
         object.__setattr__(self, "gripper_open_fraction", fraction)
         object.__setattr__(self, "canfd_follow", bool(self.canfd_follow))
         object.__setattr__(self, "canfd_smoothing", smoothing)
+        object.__setattr__(self, "settle_s", settle)
 
 
 def _load_yaml_mapping(path: Path) -> dict[str, Any]:
@@ -77,6 +83,7 @@ def load_ready_pose_config(
         gripper_open_fraction=float(ready.get("gripper_open_fraction", 1.0)),
         canfd_follow=bool(ready.get("canfd_follow", False)),
         canfd_smoothing=int(ready.get("canfd_smoothing", 50)),
+        settle_s=float(ready.get("settle_s", 2.0)),
         task_id=None if ready.get("task_id") is None else str(ready["task_id"]),
         notes=None if ready.get("notes") is None else str(ready["notes"]),
         source=str(path),
@@ -89,17 +96,20 @@ def move_arm_to_ready_joints(
     *,
     follow: bool = False,
     smoothing: int = 50,
+    settle_s: float = 2.0,
 ) -> list[float]:
-    """Move to ready joints the same way try_sc does: one ``rm_movej_canfd`` pulse."""
+    """Send try_sc-style ``rm_movej_canfd``, then wait ``settle_s`` before teleop."""
     joints = [float(value) for value in joint_position_deg]
     if len(joints) != JOINT_COUNT:
         raise ValueError(f"joint_position_deg must contain {JOINT_COUNT} values")
     if int(smoothing) < 0:
         raise ValueError("smoothing must be >= 0")
+    settle = float(settle_s)
+    if not (settle == settle) or settle < 0.0:
+        raise ValueError("settle_s must be a finite non-negative value")
     if not hasattr(arm, "rm_movej_canfd"):
         raise RuntimeError("Connected arm does not expose rm_movej_canfd")
-    # try_sc RealManEndEffectorBackend._set_joint_state:
-    #   rm_movej_canfd(joint, False, 0, 0, 50)
+    # try_sc: rm_movej_canfd(joint, False, 0, 0, 50)
     status = arm.rm_movej_canfd(
         joints,
         bool(follow),
@@ -109,4 +119,6 @@ def move_arm_to_ready_joints(
     )
     if int(status) != 0:
         raise RuntimeError(f"rm_movej_canfd to ready pose failed with SDK status {status}")
+    if settle > 0.0:
+        time.sleep(settle)
     return joints

@@ -84,3 +84,7 @@ def test_workspace_from_mapping_and_loader(tmp_path: Path) -> None:
     loaded, source = load_cartesian_workspace(path)
     assert source == str(path)
     assert loaded.max_flange_z_m == pytest.approx(0.40)
+
+    lowered = workspace_from_mapping({**mapping, "min_flange_z_m": 0.158})
+    assert lowered.min_flange_z_m == pytest.approx(0.158)
+    assert lowered.table_z_m == pytest.approx(-0.020)

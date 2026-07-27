@@ -25,11 +25,19 @@ def _extract_workspace_mapping(data: dict[str, Any]) -> dict[str, Any]:
 def workspace_from_mapping(data: dict[str, Any]) -> CartesianWorkspace:
     """Build a ``CartesianWorkspace`` from a plain mapping (e.g. YAML contents)."""
     workspace_data = _extract_workspace_mapping(data)
+    tool_tip_offset_base_m = workspace_data.get("tool_tip_offset_base_m", [0.0, 0.0, -0.178])
+    min_tool_clearance_m = float(workspace_data.get("min_tool_clearance_m", 0.0))
+    table_z_m = float(workspace_data.get("table_z_m", 0.0))
+    if "min_flange_z_m" in workspace_data:
+        # Keep the physical tool offset for XY tip projection while honoring an
+        # explicit flange-Z floor from machine-local safety YAML.
+        offset_z = float(tool_tip_offset_base_m[2])
+        table_z_m = float(workspace_data["min_flange_z_m"]) + offset_z - min_tool_clearance_m
     return CartesianWorkspace(
         polygon_xy_m=workspace_data["polygon_xy_m"],
-        table_z_m=float(workspace_data.get("table_z_m", 0.0)),
-        min_tool_clearance_m=float(workspace_data.get("min_tool_clearance_m", 0.0)),
-        tool_tip_offset_base_m=workspace_data.get("tool_tip_offset_base_m", [0.0, 0.0, -0.178]),
+        table_z_m=table_z_m,
+        min_tool_clearance_m=min_tool_clearance_m,
+        tool_tip_offset_base_m=tool_tip_offset_base_m,
         max_flange_z_m=(
             None
             if workspace_data.get("max_flange_z_m", None) is None

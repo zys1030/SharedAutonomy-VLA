@@ -16,6 +16,7 @@ from sharedautonomy.devices.spacemouse import (
 )
 from sharedautonomy.robot.gripper import (
     GripperDirection,
+    SerialSoftGripperConfig,
     SerialSoftGripperTeleop,
     SerialSoftGripperTeleopConfig,
 )
@@ -24,6 +25,8 @@ from sharedautonomy.robot.gripper import (
 class _RecordingGripper:
     def __init__(self) -> None:
         self.calls: list[tuple[GripperDirection, float, float]] = []
+        # Mirror SerialSoftGripper.config used by _settle_after_pulse().
+        self.config = SerialSoftGripperConfig(port="TEST", response_delay_s=0.0)
 
     def send_motion(
         self,
@@ -72,6 +75,58 @@ def test_serial_gripper_teleop_sends_stamp_open_close_on_button_edge() -> None:
     assert teleop.apply_human_gripper(_human_action(open_fraction=1.0, edge=True)) == 1.0
     assert gripper.calls[-1] == (GripperDirection.OPEN, 1800.0, 20.0)
     assert teleop.commands_sent == 2
+
+
+def test_serial_gripper_teleop_open_uses_working_open_fraction() -> None:
+    gripper = _RecordingGripper()
+    teleop = SerialSoftGripperTeleop(
+        gripper,  # type: ignore[arg-type]
+        SerialSoftGripperTeleopConfig(working_open_fraction=0.65),
+    )
+
+    assert teleop.apply_human_gripper(_human_action(open_fraction=1.0, edge=True)) == 1.0
+    assert gripper.calls == [(GripperDirection.OPEN, 1170.0, 20.0)]
+
+    assert teleop.apply_human_gripper(_human_action(open_fraction=0.0, edge=True)) == 0.0
+    assert gripper.calls[-1] == (GripperDirection.CLOSE, 1872.0, 20.0)
+
+    assert teleop.apply_human_gripper(_human_action(open_fraction=1.0, edge=True)) == 1.0
+    assert gripper.calls[-1] == (GripperDirection.OPEN, 1170.0, 20.0)
+
+
+def test_serial_gripper_move_to_working_open_closes_then_partial_opens() -> None:
+    gripper = _RecordingGripper()
+    teleop = SerialSoftGripperTeleop(
+        gripper,  # type: ignore[arg-type]
+        SerialSoftGripperTeleopConfig(working_open_fraction=0.6),
+    )
+
+    close_angle, open_angle = teleop.move_to_working_open(0.6)
+    assert close_angle == 1872.0
+    assert open_angle == 1080.0
+    assert gripper.calls == [
+        (GripperDirection.CLOSE, 1872.0, 20.0),
+        (GripperDirection.OPEN, 1080.0, 20.0),
+    ]
+    assert teleop.commands_sent == 2
+    assert teleop.commanded_open_fraction == 1.0
+
+
+def test_serial_gripper_open_to_fraction_scales_ready_open_pulse() -> None:
+    gripper = _RecordingGripper()
+    teleop = SerialSoftGripperTeleop(
+        gripper,  # type: ignore[arg-type]
+        SerialSoftGripperTeleopConfig(open_angle_deg=1800.0),
+    )
+
+    assert teleop.open_to_fraction(0.65) == 1.0
+    assert gripper.calls == [(GripperDirection.OPEN, 1170.0, 20.0)]
+
+    assert teleop.open_to_fraction(1.0) == 1.0
+    assert gripper.calls[-1] == (GripperDirection.OPEN, 1800.0, 20.0)
+
+    assert teleop.open_to_fraction(0.0) == 0.0
+    assert gripper.calls[-1] == (GripperDirection.CLOSE, 1872.0, 20.0)
 
 
 def test_spacemouse_human_action_carries_gripper_button_edge() -> None:

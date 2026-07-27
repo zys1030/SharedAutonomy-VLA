@@ -1,5 +1,12 @@
 """Dataset schemas, recording, validation, and visualization."""
 
+from .episode_check import (
+    EpisodeCheckReport,
+    check_episode_dir,
+    check_recorded_episode,
+    episode_check_report_to_dict,
+    format_episode_check_report,
+)
 from .recorder import (
     EPISODE_FORMAT,
     EpisodeRecorder,
@@ -33,6 +40,7 @@ from .sync import (
 )
 
 __all__ = [
+    "EpisodeCheckReport",
     "EPISODE_FORMAT",
     "SCHEMA_VERSION",
     "AssistAction",
@@ -55,6 +63,10 @@ __all__ = [
     "StaticCameraSource",
     "StaticProprioceptiveSource",
     "SyncedObservation",
+    "check_episode_dir",
+    "check_recorded_episode",
+    "episode_check_report_to_dict",
+    "format_episode_check_report",
     "load_recorded_episode",
     "proprioceptive_sample_from_cartesian",
     "rpy_rad_to_quaternion_xyzw",

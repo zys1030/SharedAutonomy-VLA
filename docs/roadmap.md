@@ -5,28 +5,35 @@
 ## 当前状态
 
 - 当前阶段：**Week 1：硬件、数据与最小训练闭环**
-- 最近完成的每日计划：[2026-07-24 plan](daily/2026-07-24/plan.md)
-- 当前每日计划：待创建下一工作日 `plan.md`
+- 最近完成的每日计划：[2026-07-24 plan](daily/2026-07-24/plan.md)（Day 2 完成：采集闭环 + check/replay）
+- 当前每日计划：[2026-07-25 plan](daily/2026-07-25/plan.md)（Day 3：LeRobot export 最小版）
 - 最近工作日志：[2026-07-24 log](daily/2026-07-24/log.md)
-- 下一步主线：**采集闭环**（`EpisodeRecorder` 接入 teleop + 首条短 episode 落盘/加载验证；默认 **10 Hz** `collection_teleop`）
+- 下一步主线：**native → LeRobot export**，再接最小训练 smoke；正式 10 条人工轨迹待第三视角支架（约两天后）与 FOV 验收后进行
 
 ## Week 1：硬件、数据与最小训练闭环
 
 - [x] 创建仓库和目录骨架；
 - [x] 接入 RM-65B、夹爪、SpaceMouse、腕部 RGB-D 与固定第三视角 RGB 相机；
   - 硬件连通与软件双相机 observation 接线已完成（2026-07-24）；
-  - 第三视角支架安装与正式采集 FOV 仍待后续；
+  - 第三视角支架安装与正式采集 FOV 仍待后续（预计约两天后到货）；
 - [x] 确定统一坐标系和第一阶段动作表示；
 - [ ] 完成运行时跨设备时间同步；
   - 统一时间戳接口、`ObservationSynchronizer` 与双相机 `CameraSource` 已落地；
   - 尚需接入正式采集 runner 并长期稳定 running；
 - [ ] 采集并回放 10 条人工轨迹；
-- [ ] 建立数据校验和可视化工具；
+  - check/replay 工具已就绪；smoke 样本可回放；
+  - 正式 10 条待支架 FOV 后启动（临时摆放可练习，不计入正式集）；
+- [x] 建立数据校验和可视化工具；
+  - `check_episode` / `replay_episode`（含 EE 3D、`--json`）已完成（2026-07-24）；
+  - native 为真相源；LeRobot 侧可视化待 export 后可选叠加；
 - [ ] 用小数据完成 ACT/VLA smoke test。
+  - 前置：native → LeRobot export（见 [2026-07-25 plan](daily/2026-07-25/plan.md)）。
 
 验收标准：
 
 > 一条命令开始采集，一条命令检查数据，一条命令启动最小训练。
+
+（前两句第一版已具备；第三句待 export + 训练 smoke。）
 
 ## Week 2：SharedAutonomy 采集器
 
@@ -80,4 +87,3 @@
 4. 意图切换与 ETDL 扩展；
 5. 灵巧手低维手型扩展；
 6. 仿真接口。
-

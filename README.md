@@ -45,6 +45,16 @@ pytest -m core
 
 # 离线 teleop dry-run（默认不运动）
 python scripts/dry_run_manual_cartesian.py
+
+# 检查已录制的 native episode（文本摘要；issues 非空时 exit 1）
+python scripts/check_episode.py outputs/runs/<run_id>/episode
+
+# 机器可读 JSON（便于批量过滤）
+python scripts/check_episode.py outputs/runs/<run_id>/episode --json
+
+# 可视化回放（wrist + external + EE 3D；←/→ 步进，--hz 自动播放）
+python scripts/replay_episode.py outputs/runs/<run_id>/episode
+python scripts/replay_episode.py outputs/runs/<run_id>/episode --hz 5
 ```
 
 机器本地 IP、标定与串口配置放在 `configs/local/`（见 `configs/local/*.example.yaml`），不要提交到仓库。

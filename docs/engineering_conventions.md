@@ -75,6 +75,26 @@ outputs/runs/<run_id>/
 - `events.jsonl`：低频、可审计的结构化事件；不是高频轨迹存储。
 - `episode/`：由后续 recorder 按 LeRobot-compatible schema 保存观测、动作和元数据。
 
+### Episode 检查与回放
+
+native episode 落盘后可用只读脚本做结构检查与可视化（不连机械臂）：
+
+```powershell
+# 文本摘要：步数、相机覆盖率、sync_warnings、动作/EE 统计
+python scripts/check_episode.py outputs/runs/<run_id>/episode
+
+# JSON：同一份 EpisodeCheckReport，便于脚本批量过滤
+python scripts/check_episode.py outputs/runs/<run_id>/episode --json
+
+# 步进回放：wrist / external RGB + EE 3D 轨迹；←/→ 或 --hz
+python scripts/replay_episode.py outputs/runs/<run_id>/episode
+python scripts/replay_episode.py outputs/runs/<run_id>/episode --step 10 --hz 5
+```
+
+- `check`：`issues`（缺文件、格式错误、步数不一致等）→ exit 1；仅有 `warnings`（如缺 `images/`）→ exit 0。
+- `replay`：需要完整 `metadata.json`、`steps.jsonl` 和 `images/` 中引用的 `.npy`。
+- 核心校验逻辑在 `sharedautonomy.data.episode_check`；脚本只做 CLI。不为 `scripts/` 本地辅助函数新增单元测试。
+
 ## 配置约定
 
 ### 格式与覆盖顺序

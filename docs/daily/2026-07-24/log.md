@@ -7,10 +7,13 @@
 ## 完成情况
 
 - [x] P0：Cartesian/SpaceMouse runner、安全链、mock/dry-run、离线测试全部完成；
-- [x] P1：真实 IK、UDP 状态、SpaceMouse、CAN-FD、10 Hz XYZ 真机冒烟全部完成；
-- [x] P1：episode recorder、同步观测、加载回放接口完成；
+- [x] P0：真实 IK、UDP 状态、SpaceMouse、CAN-FD、10 Hz XYZ 真机冒烟全部完成；
+- [x] P0：episode recorder、同步观测、加载接口完成；
+- [x] P0：**check_episode / replay_episode**（库函数 + CLI + 真机样本跑通 + core 单测）；
+- [x] P1：EE 3D 轨迹子图、check `--json`、README / `engineering_conventions.md` 命令示例；
 - [x] 计划外：第三视角 C920 枚举与延迟基线、双相机并行验证、双相机接入每步 observation；
-- [ ] 未做：正式人工轨迹采集、EpisodeRecorder 接入 teleop 落盘、可视化回放。
+- [x] 计划外：teleop / motion / 带录制 smoke（`teleop-smoke-001`、`teleop-motion-smoke-001/002`）；
+- [ ] 未做：批量正式人工轨迹（10 条）；LeRobot export；第三视角支架安装（预计约两天后到货）。
 
 ## 实验与结果
 
@@ -19,45 +22,83 @@
 | Cartesian teleop 10 Hz XYZ | 轴映射 OK；Z 漂移已修；hold-Z 有效 | 可作为采集控制链基础 |
 | 外部 C920 单路 30s | ~30 Hz；50 Hz 消费年龄中位 ~16 ms | 软件新鲜度满足 10 Hz 采集 |
 | C920 + D435i 双路并行 30s | 两路均 ~30 Hz；无 timeout/掉帧 | 当前 USB 拓扑可继续实验 |
-| 双相机 observation 接线 | `pytest -m core` 46 passed | 每步 `synced_observation` 含 wrist + external |
+| teleop-motion-smoke-002 | 运动 + 双相机录制 + `--no-lock-z`；XY-only net dZ ≈ 0.24 mm | 采集闭环可验收 |
+| check / replay 真机样本 | `teleop-motion-smoke-002`：100 步，wrist 100%、external 99%；replay + EE 3D 正常 | 「一条命令检查数据」第一版达标 |
+| `pytest -m core` | 52 passed（含 episode_check） | 离线回归可用 |
 
 ## 新结论与决策
 
 - 正式采集命令频率维持 **10 Hz**（`collection_teleop`）；
-- 第三视角仅作 RGB 输入时，精确外参/支架不是当前前置；
+- 第三视角仅作 RGB 输入时，精确外参/支架不是当前软件前置；**正式 FOV 仍等支架**；
 - C920 在当前机器上 OpenCV DirectShow index 应使用 `opencv_index_hint: 3`（勿盲信 PnP 枚举顺序）；
-- 双相机并行未见明显带宽退化，可在此 USB 条件下推进。
+- replay 采用 **matplotlib**（多面板 + 状态文本 + EE 3D）；非 OpenCV 视频窗；
+- check：`issues` → exit 1；仅 `warnings`（如缺 `images/`）→ exit 0；支持 `--json`；
+- native episode 约 230 MB/10 s（未压缩 `.npy`）；smoke 后可删 `images/`；
+- native episode 是语义真相源；LeRobot 可视化需等 export adapter，二者不互相替代。
+
+## 今日理解重点（15–30 分钟）
+
+### 1. Native episode vs LeRobot dataset
+
+- **一句话**：采集落盘用强类型 native 格式；训练侧再经 adapter 转成 LeRobot 扁平数据集。
+- **为什么重要**：SharedAutonomy 字段（human/executed、deadman、sync_warnings）在 native 层可完整保留。
+- **本项目怎么做**：`EpisodeRecorder` 写盘；`check`/`replay` 只读 native；export 尚未做。
+- **代码入口**：`sharedautonomy/data/recorder.py`、`sharedautonomy/data/episode_check.py`。
+- **自测问题**：为什么现在不能直接用 LeRobot 自带可视化检查刚采的 episode？
+
+### 2. check = 结构完整性 + 健康度摘要
+
+- **一句话**：硬失败看 `issues`；软提示与统计进 `warnings` / 摘要字段，不自动判定「适合训练」。
+- **为什么重要**：采完能快速发现坏盘/缺文件，批量时可用 `--json` 过滤。
+- **本项目怎么做**：`check_episode_dir` 不加载 `.npy`；缺 `images/` 仍可文本检查。
+- **代码入口**：`scripts/check_episode.py`、`episode_check_report_to_dict`。
+- **自测问题**：缺 `images/` 时 exit code 是多少？为什么？
+
+### 3. 采集安全链与双确认运动门闩
+
+- **一句话**：输入新鲜度 → 真实 dt 限幅 → 固定姿态 → 工作空间 → IK → 关节过滤；运动需配置 + CLI 双确认。
+- **为什么重要**：默认 dry-run，避免误动真机。
+- **本项目怎么做**：`CartesianSafetyFilter` + `resolve_motion_enabled` + teleop runner。
+- **代码入口**：`sharedautonomy/control/manual.py`、`scripts/dry_run_cartesian_teleop.py`。
+- **自测问题**：只开 `--allow-motion` 但不改 local config，会不会真正动臂？
+
+### 面试式自测
+
+1. check 和 replay 分别解决什么问题？为何不合并成一个脚本？
+   - 参考要点：批量/CI vs 肉眼验收；文本统计 vs 加载图像；exit code vs GUI。
+2. 支架未到时，还能推进哪条软件主线？
+   - 参考要点：LeRobot export / 训练 smoke；临时摆放 C920 练习采集；正式 10 条等 FOV。
 
 ## 代码与文档变更
 
-- `sharedautonomy/control/manual.py`：每步附加 `synced_observation`；
-- `sharedautonomy/devices/cameras.py`：RealSense + UVC 后台采集；
-- `sharedautonomy/control/observation.py`：本地配置加载与 synchronizer 构建；
-- `sharedautonomy/data/recorder.py`、`sharedautonomy/data/sync.py`：episode 与同步观测；
-- `scripts/dry_run_cartesian_teleop.py`：`--enable-cameras`；
-- 诊断脚本：`check_external_rgb_latency.py`、`check_dual_camera_parallel.py`（`scripts/`，手动执行）。
+- `sharedautonomy/data/episode_check.py`：摘要/校验 + JSON 序列化；
+- `scripts/check_episode.py`、`scripts/replay_episode.py`（含 EE 3D）；
+- `tests/test_episode_check.py`；
+- `README.md`、`docs/engineering_conventions.md`：检查与回放命令；
+- 上午已落地：`recorder` / `sync` / cameras / teleop runner / observation 接线（见同日上午记录）。
 
 ## 验证
 
-- `pytest -m core`：46 passed；
-- 真机：10 Hz XYZ 冒烟、双相机并行检查（无运动采集闭环）；
-- 未验证：`--enable-cameras` 与 UDP teleop 长时间联跑、正式 episode 落盘。
+- 真机：`teleop-smoke-001`、`teleop-motion-smoke-001/002`；
+- 离线：`check` / `replay` 对 `teleop-motion-smoke-002`；
+- `pytest -m core`：52 passed。
 
 ## 未完成与阻塞
 
-- EpisodeRecorder 尚未挂到 teleop 采集命令（缺“一条命令开始采集”）；
-- 数据校验/可视化工具未建；
-- 支架未到，第三视角固定安装位姿与 FOV 未定；
-- LeRobot export adapter 未做。
+- 批量正式人工轨迹（10 条）：等 check/replay 稳定后；**正式第三视角 FOV 待支架（约两天后）**；
+- LeRobot export adapter 与 ACT/VLA smoke：**未做**（明日主线候选）；
+- 支架未到：第三视角固定安装位姿未定。
 
 ## 已沉淀到长期文档
 
-- 硬件与延迟结论仍见 [`../../hardware_setup.md`](../../hardware_setup.md)（第三视角条目待补一轮正式记录）；
+- 检查/回放约定 → [`../../engineering_conventions.md`](../../engineering_conventions.md)；
+- 命令入口 → [`../../../README.md`](../../../README.md)；
+- 硬件与延迟结论仍见 [`../../hardware_setup.md`](../../hardware_setup.md)（第三视角支架安装后补 FOV）；
 - 数据接口见 [`../../decisions/0001-runtime-data-interfaces.md`](../../decisions/0001-runtime-data-interfaces.md)。
 
 ## 下一工作日建议
 
-1. **P0**：`dry_run_cartesian_teleop.py --enable-cameras` 短跑真机，确认每步两路图像与 sync warnings；
-2. **P0**：把 `EpisodeRecorder` 接到 teleop runner（`--record-dir` / 开始结束键），跑 1 条短 episode 并 `load_recorded_episode` 验证；
-3. **P1**：最小数据检查脚本（步数、相机覆盖率、动作统计）；
-4. 支架到后再做固定安装与 FOV 验收。
+1. **主线（不等支架）**：设计并实现 native episode → LeRobot dataset 的 **export adapter** 最小版（至少能从 smoke episode 导出并 `load`）；
+2. 用 export 结果做 **LeRobot 侧可视化或 ACT/VLA smoke 前置检查**（能跑多深视环境与时间而定）；
+3. **可选**：临时摆放 C920 再练 1–2 条 teleop（不计入正式 10 条）；
+4. **支架到货后**：固定第三视角安装 + FOV 验收，再开正式 10 条人工轨迹。

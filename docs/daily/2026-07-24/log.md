@@ -38,6 +38,8 @@
 
 ## 今日理解重点（15–30 分钟）
 
+自测问题见各条目；**完整参考答案在文末「自测参考答案」**。
+
 ### 1. Native episode vs LeRobot dataset
 
 - **一句话**：采集落盘用强类型 native 格式；训练侧再经 adapter 转成 LeRobot 扁平数据集。
@@ -64,10 +66,10 @@
 
 ### 面试式自测
 
+先只读问题，自己作答；答案见文末「自测参考答案」。
+
 1. check 和 replay 分别解决什么问题？为何不合并成一个脚本？
-   - 参考要点：批量/CI vs 肉眼验收；文本统计 vs 加载图像；exit code vs GUI。
 2. 支架未到时，还能推进哪条软件主线？
-   - 参考要点：LeRobot export / 训练 smoke；临时摆放 C920 练习采集；正式 10 条等 FOV。
 
 ## 代码与文档变更
 
@@ -102,3 +104,24 @@
 2. 用 export 结果做 **LeRobot 侧可视化或 ACT/VLA smoke 前置检查**（能跑多深视环境与时间而定）；
 3. **可选**：临时摆放 C920 再练 1–2 条 teleop（不计入正式 10 条）；
 4. **支架到货后**：固定第三视角安装 + FOV 验收，再开正式 10 条人工轨迹。
+
+## 自测参考答案
+
+### 理解重点
+
+1. **Native episode vs LeRobot dataset — 为什么现在不能直接用 LeRobot 自带可视化检查刚采的 episode？**
+   - 参考答案：刚采的是 native 目录（`metadata.json` + `steps.jsonl` + `images/`），不是 LeRobot dataset schema。LeRobot 工具吃扁平 feature；SharedAutonomy 字段要等 export adapter。现在用 `check_episode` / `replay_episode` 查 native。
+
+2. **check = 结构完整性 + 健康度摘要 — 缺 `images/` 时 exit code 是多少？为什么？**
+   - 参考答案：exit **0**（仅 warning）。硬失败是缺 metadata/steps、格式错误、步数不一致等 `issues`。缺图像时动作与 EE 统计仍可用；训练侧视觉不可用，但不把结构检查判死。
+
+3. **采集安全链与双确认运动门闩 — 只开 `--allow-motion` 但不改 local config，会不会真正动臂？**
+   - 参考答案：**不会**。运动需 local config `enable_motion=true` **且** CLI `--allow-motion`；缺一即 dry-run / 不发运动命令。
+
+### 面试式自测
+
+1. **check 和 replay 分别解决什么问题？为何不合并成一个脚本？**
+   - 参考答案：check 做快速结构校验与统计摘要（可批量、`--json`、exit code），不加载大图也可跑。replay 逐步看 RGB + 状态 + EE 轨迹，给人肉眼验收。合并会让批量/CI 也被迫开 GUI、加载全部图像，职责混在一起。
+
+2. **支架未到时，还能推进哪条软件主线？**
+   - 参考答案：native → LeRobot export、训练 smoke、SharedAutonomy 算法/接口复用；临时摆放 C920 可练习采集。支架主要挡正式 FOV 与正式 10 条数据质量，不是全部软件工作的门闩。

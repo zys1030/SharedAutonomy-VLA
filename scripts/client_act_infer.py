@@ -16,6 +16,9 @@ from typing import Any
 
 import numpy as np
 from sharedautonomy.policies.act.protocol import (
+    DEFAULT_JPEG_QUALITY,
+    JPEG_IMAGE_ENCODING,
+    RAW_IMAGE_ENCODING,
     InferObservation,
     chw_float_to_hwc_uint8,
     observation_to_payload,
@@ -72,6 +75,18 @@ def parse_args() -> argparse.Namespace:
         help="Only for --mode dataset-local",
     )
     parser.add_argument("--timeout-s", type=float, default=120.0)
+    parser.add_argument(
+        "--image-encoding",
+        choices=(JPEG_IMAGE_ENCODING, RAW_IMAGE_ENCODING),
+        default=JPEG_IMAGE_ENCODING,
+        help="Only for --mode dataset-local (default jpeg_b64; use base64 for raw A/B)",
+    )
+    parser.add_argument(
+        "--jpeg-quality",
+        type=int,
+        default=DEFAULT_JPEG_QUALITY,
+        help=f"JPEG quality when --image-encoding={JPEG_IMAGE_ENCODING} (default {DEFAULT_JPEG_QUALITY})",
+    )
     parser.add_argument(
         "--log-level",
         default="INFO",
@@ -183,7 +198,11 @@ def main() -> int:
     result = _http_json(
         "POST",
         f"{base}/infer",
-        payload=observation_to_payload(obs),
+        payload=observation_to_payload(
+            obs,
+            image_encoding=str(args.image_encoding),
+            jpeg_quality=int(args.jpeg_quality),
+        ),
         timeout_s=args.timeout_s,
     )
     print(json.dumps({k: v for k, v in result.items() if k != "traceback"}, indent=2))

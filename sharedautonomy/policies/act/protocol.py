@@ -1,8 +1,10 @@
 """JSON wire format for ACT cloud inference (observation in, action out).
 
-Images travel as base64-encoded HWC uint8 RGB (ADR 0002 camera layout).
+Images travel as base64-encoded HWC uint8 RGB (ADR 0002 camera layout), either
+raw (``encoding="base64"``) or JPEG-compressed (``encoding="jpeg_b64"``) to cut
+the ~2.4MB/step payload on bandwidth-limited links.
 No LeRobot / torch imports here so a thin client can encode without GPU stacks
-beyond numpy.
+beyond numpy (cv2 is imported lazily only on the JPEG path).
 """
 
 from __future__ import annotations
@@ -18,6 +20,10 @@ STATE_DIM = 7
 DEFAULT_IMAGE_HWC = (480, 640, 3)
 WRIST_KEY = "wrist"
 EXTERNAL_KEY = "external"
+
+RAW_IMAGE_ENCODING = "base64"
+JPEG_IMAGE_ENCODING = "jpeg_b64"
+DEFAULT_JPEG_QUALITY = 90
 
 
 @dataclass(frozen=True)
@@ -60,30 +66,76 @@ def validate_observation(obs: InferObservation) -> None:
         raise ValueError("task must be a non-empty string")
 
 
-def _encode_image_hwc_uint8(image: np.ndarray) -> dict[str, Any]:
+def _encode_image_hwc_uint8(
+    image: np.ndarray,
+    *,
+    encoding: str = RAW_IMAGE_ENCODING,
+    jpeg_quality: int = DEFAULT_JPEG_QUALITY,
+) -> dict[str, Any]:
     image = np.asarray(image)
     if image.dtype != np.uint8 or image.ndim != 3 or image.shape[-1] != 3:
         raise ValueError(f"image must be HWC uint8 RGB, got dtype={image.dtype} shape={image.shape}")
+    if encoding == RAW_IMAGE_ENCODING:
+        data_b64 = base64.b64encode(np.ascontiguousarray(image).tobytes()).decode("ascii")
+    elif encoding == JPEG_IMAGE_ENCODING:
+        data_b64 = _jpeg_encode_rgb(image, jpeg_quality=jpeg_quality)
+    else:
+        raise ValueError(f"unknown image encoding: {encoding!r}")
     return {
         "shape": list(image.shape),
         "dtype": "uint8",
-        "encoding": "base64",
-        "data_b64": base64.b64encode(np.ascontiguousarray(image).tobytes()).decode("ascii"),
+        "encoding": encoding,
+        "data_b64": data_b64,
     }
+
+
+def _jpeg_encode_rgb(image_rgb: np.ndarray, *, jpeg_quality: int) -> str:
+    import cv2
+
+    if not 1 <= int(jpeg_quality) <= 100:
+        raise ValueError(f"jpeg_quality must be in [1, 100], got {jpeg_quality}")
+    bgr = np.ascontiguousarray(image_rgb[..., ::-1])
+    ok, buffer = cv2.imencode(".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, int(jpeg_quality)])
+    if not ok:
+        raise RuntimeError("cv2.imencode(.jpg) failed")
+    return base64.b64encode(buffer.tobytes()).decode("ascii")
 
 
 def _decode_image_hwc_uint8(payload: dict[str, Any]) -> np.ndarray:
     shape = tuple(int(x) for x in payload["shape"])
-    if payload.get("dtype") != "uint8" or payload.get("encoding") != "base64":
-        raise ValueError("image payload must use dtype=uint8 and encoding=base64")
+    if payload.get("dtype") != "uint8":
+        raise ValueError("image payload must use dtype=uint8")
+    encoding = payload.get("encoding")
     raw = base64.b64decode(payload["data_b64"])
-    image = np.frombuffer(raw, dtype=np.uint8).reshape(shape)
+    if encoding == RAW_IMAGE_ENCODING:
+        image = np.frombuffer(raw, dtype=np.uint8).reshape(shape)
+    elif encoding == JPEG_IMAGE_ENCODING:
+        image = _jpeg_decode_rgb(raw)
+    else:
+        raise ValueError(f"unknown image encoding: {encoding!r}")
     if image.ndim != 3 or image.shape[-1] != 3:
         raise ValueError(f"decoded image must be HWC RGB, got {image.shape}")
+    if tuple(image.shape) != shape:
+        raise ValueError(f"decoded image shape {tuple(image.shape)} does not match payload shape {shape}")
     return image
 
 
-def observation_to_payload(obs: InferObservation) -> dict[str, Any]:
+def _jpeg_decode_rgb(data: bytes) -> np.ndarray:
+    import cv2
+
+    buffer = np.frombuffer(data, dtype=np.uint8)
+    bgr = cv2.imdecode(buffer, cv2.IMREAD_COLOR)
+    if bgr is None:
+        raise ValueError("cv2.imdecode failed on JPEG payload")
+    return np.ascontiguousarray(bgr[..., ::-1])
+
+
+def observation_to_payload(
+    obs: InferObservation,
+    *,
+    image_encoding: str = RAW_IMAGE_ENCODING,
+    jpeg_quality: int = DEFAULT_JPEG_QUALITY,
+) -> dict[str, Any]:
     validate_observation(obs)
     return {
         "task": str(obs.task),
@@ -91,8 +143,12 @@ def observation_to_payload(obs: InferObservation) -> dict[str, Any]:
         "observation": {
             "state": np.asarray(obs.state, dtype=np.float32).reshape(STATE_DIM).tolist(),
             "images": {
-                WRIST_KEY: _encode_image_hwc_uint8(obs.wrist_rgb_hwc),
-                EXTERNAL_KEY: _encode_image_hwc_uint8(obs.external_rgb_hwc),
+                WRIST_KEY: _encode_image_hwc_uint8(
+                    obs.wrist_rgb_hwc, encoding=image_encoding, jpeg_quality=jpeg_quality
+                ),
+                EXTERNAL_KEY: _encode_image_hwc_uint8(
+                    obs.external_rgb_hwc, encoding=image_encoding, jpeg_quality=jpeg_quality
+                ),
             },
         },
     }

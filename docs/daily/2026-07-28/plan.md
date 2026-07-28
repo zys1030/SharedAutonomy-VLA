@@ -37,9 +37,9 @@
 
 - [x] checkpoint 确认 + 训练语义对齐（已完成）：`state/action` 7 维；双 RGB CHW；`chunk_size=n_action_steps=100`；单帧 `select_action` 量级合理；
 - [x] **离线检查收尾**（服务器）：episode0 多帧开环；`mae_joints≈1.0°`，`max≈3.8°`；夹爪 MAE≈0.017；路径为 preprocessor + `select_action`（chunk 缓存，需 `reset`）；
-- [ ] **云端推理最小通路**：`scripts/serve_act_policy.py` + `client_act_infer.py` 已落地；**待在服务器启动并对本机/本机回路调通**；
-- [ ] 接口约定写进当日 log（脚本 docstring 已有；log 收工补）；
-- [ ] （可选）本机哑 client 打一次云端 `/infer` 或 `/infer_dataset`，只打印动作，**不连臂**。
+- [x] **云端推理最小通路**：`scripts/serve_act_policy.py` + `client_act_infer.py`；本机 `dataset-remote` 已通（动作与离线 frame0 一致）；
+- [x] 接口约定写进当日 log（见 [log.md](log.md)「常用命令」+ 接口约定表）；
+- [x] 本机哑 client 打通云端 `/infer_dataset`，只打印动作，**不连臂**。
 
 **今晚明确不做**
 
@@ -118,10 +118,13 @@
   - `scripts/client_act_infer.py`：dumb client（health / dataset-remote / dataset-local）；
   - 库：`sharedautonomy/policies/act/{protocol,runtime}.py`；
   - 默认端口 **8088**；action 为逐步 `select_action` 的 7 维（chunk_size 元数据随响应返回）；
-- [ ] **C. 约定落盘（~10–15 min）**
-  - 字段、单位、checkpoint 路径、如何启动 → 补 [log.md](log.md)「常用命令」；
-- [ ] **D. 本机哑 client 实机打通（~15 min）**
-  - 服务器启动 serve；本机 `client_act_infer.py --mode dataset-remote`；**不**开相机/臂/运动。
+- [x] **C. 约定落盘（~10–15 min）**
+  - 字段、单位、checkpoint 路径、启动命令 → 已补 [log.md](log.md)；
+- [x] **D. 本机哑 client 实机打通（~15 min）**
+  - 服务器 serve；本机 `client_act_infer.py --mode dataset-remote` 已通；**未**开相机/臂/运动。
+- [ ] （可选余时）`dataset-local` 传图对照；连续多帧 / 延迟粗测。
+- [x] **真机观测 dry-run**：`scripts/dry_run_act_observe_infer.py`（相机+UDP → `/infer`，**不下发**）；ready 下开环 OK；RTT~550ms 记入 log。
+- [ ] （换 session）压 RTT / 修 `infer_dataset` / safety+开运动。
 
 ### P1：有时间再做
 

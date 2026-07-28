@@ -14,6 +14,7 @@ import argparse
 import json
 import logging
 import sys
+import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -108,10 +109,29 @@ def make_handler(runtime: ActInferenceRuntime) -> type[BaseHTTPRequestHandler]:
             path = urlparse(self.path).path
             try:
                 if path == "/infer":
+                    t0 = time.perf_counter()
                     payload = _read_json(self)
+                    t1 = time.perf_counter()
                     obs = payload_to_observation(payload)
+                    t2 = time.perf_counter()
                     result = runtime.infer(obs)
-                    _json_response(self, 200, {"ok": True, **response_to_payload(result)})
+                    t3 = time.perf_counter()
+                    body = {"ok": True, **response_to_payload(result)}
+                    t4 = time.perf_counter()
+                    timings = {
+                        "read_json_ms": (t1 - t0) * 1000.0,
+                        "decode_images_ms": (t2 - t1) * 1000.0,
+                        "forward_ms": (t3 - t2) * 1000.0,
+                        "serialize_ms": (t4 - t3) * 1000.0,
+                    }
+                    logger.info(
+                        "infer timings: read=%.1fms decode=%.1fms forward=%.1fms serialize=%.1fms",
+                        timings["read_json_ms"],
+                        timings["decode_images_ms"],
+                        timings["forward_ms"],
+                        timings["serialize_ms"],
+                    )
+                    _json_response(self, 200, {**body, "timings_ms": {k: round(v, 1) for k, v in timings.items()}})
                     return
                 if path == "/infer_dataset":
                     payload = _read_json(self)

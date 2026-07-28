@@ -226,7 +226,9 @@ SpaceMouse yaw
 - **已接入 manual Cartesian runner（离线 mock / dry-run）**：基于真实 `dt` 的末端速度/加速度限制；当前保守初值见 `configs/collection/manual_cartesian.yaml`；
 - **已接入 manual Cartesian runner（离线 mock / dry-run）**：固定竖直夹爪的凸四边形 XY 工作区、桌面净空、固定姿态和输入新鲜度检查。
 
-旧 `stamp` 装置的机械臂底座、桌面和夹爪安装未改变，SDK 返回法兰位姿。用户复核的四个边界点（Base 坐标系，单位由 mm 转为 m）依次为 `(-0.456, 0.107)`、`(-0.387, -0.236)`、`(-0.170, -0.420)`、`(-0.150, 0.068)`，构成凸四边形。夹爪固定竖直向下时，旧项目实测法兰到夹爪尖端偏移为 0.178 m。用户确认法兰 Z 为 0.180 m 时夹爪仍与桌面有缝，且抓取任务需要最低到达 0.178 m，因此不额外叠加净空，默认最低法兰 Z 为 0.178 m。几何值保存在本机 `configs/local/rm65_safety.local.yaml`（模板见 `configs/local/rm65_safety.example.yaml`），不会写入共享硬件配置。
+旧 `stamp` 装置的机械臂底座、桌面和夹爪安装未改变，SDK 返回法兰位姿。用户复核的四个边界点（Base 坐标系，单位由 mm 转为 m）依次为 `(-0.456, 0.107)`、`(-0.387, -0.236)`、`(-0.170, -0.420)`、`(-0.150, 0.068)`，构成凸四边形。夹爪固定竖直向下时，旧项目实测法兰到夹爪尖端偏移为 0.178 m。用户确认法兰 Z 为 0.180 m 时夹爪仍与桌面有缝，且抓取任务需要最低到达 0.178 m，因此不额外叠加净空，默认最低法兰 Z 为 0.178 m。几何值保存在本机 `configs/local/rm65_safety.local.yaml`（模板见 `configs/robot/rm65_safety.example.yaml`），不会写入共享硬件配置。
+
+**2026-07-27 更新（shape_pick_place_v1）**：为覆盖拾取区 `x∈[-0.42,-0.15]`、`y∈[-0.09,0.17]`，将 `polygon_xy_m` 外扩为 7 顶点凸多边形，并将 `min_flange_z_m` 调整为 **0.158 m**（较 stamp 时代再低 20 mm）。拾取区四角与工作区关系见上文 **「shape_pick_place_v1 工作区」**；验收用 `scripts/check_workspace_pick_zone.py`。
 
 Cartesian/SpaceMouse runner 已按“输入时间检查 → 真实 `dt` 速度/加速度限制 → 固定姿态检查 → 工作空间整段检查 → IK → 关节过滤”串到控制步中。当前保守初值：`max_speed_m_s=0.05`、`max_acceleration_m_s2=0.25`、`orientation_tolerance_rad=0.05`、`input_timeout_s=0.1`、`robot_state_timeout_s=0.05`、`max_flange_z_m=0.45`。
 
@@ -361,7 +363,97 @@ Depth 与 Color 均报告 `timestamp_domain.system_time`。Color timestamp 到 P
 
 运行时应优先读取当前 active profile 的内参，并复用 `T_cam2ee`。只要腕部相机或末端支架发生拆装、松动或相对位姿变化，就必须重新做手眼验证；不能因分辨率保持 640×480 而继续假设外参有效。
 
-固定第三视角相机尚未购买，本次未检查，README 中双相机总检查项保持未完成。
+固定第三视角相机的安装、FOV 与工作区扩展见下文 **「固定第三视角 RGB」** 与 **「shape_pick_place_v1 工作区」**；双相机并行采集结论亦记录在下节。
+
+## 固定第三视角 RGB（external）
+
+### 设备、安装与用途
+
+2026-07-24 起接入 **Logitech C920** 作为固定第三视角 RGB（UVC，`UvcRgbCamera`）。2026-07-27 完成**支架固定安装**，并用在线预览工具完成 FOV 验收（不单独录制 motion smoke）。
+
+当前角色：
+
+- **ACT/VLA**：`observation.images.external`，与腕部 RGB 并列输入；
+- **采集验收**：画面须同时覆盖**左侧拾取区**与**右侧整张 A4**（含 UP/DOWN 标注或黑线），见 [`tasks/shape_pick_place_v1.md`](tasks/shape_pick_place_v1.md) §2；
+- **SharedAutonomy**：桌面单应性 XY 辅助属 Week 2；Phase 1 Manual 采集**不要求**精确 external 外参。
+
+OpenCV 设备索引、USB 拓扑和曝光策略保存在本机 `configs/local/`，不在本文复制。Windows 上通过 DirectShow 打开；**勿盲信设备管理器或 PnP 枚举顺序**——2026-07-24 在本机曾需 `opencv_index_hint: 3`，换 USB 转接或 Hub 后必须重验。
+
+### Profile 与软件新鲜度
+
+与腕部 Color 对齐，采集使用：
+
+- **640×480 @ 30 FPS**；
+- RGB only（无深度）；
+- 预热默认 60 帧（约 2 s，见 `UvcRgbCamera.warmup_frames`）。
+
+2026-07-24 延迟基线（预热后约 30 s）：
+
+| 场景 | 结果 | 结论 |
+| --- | --- | --- |
+| C920 单路 | ~30 Hz；50 Hz 消费时最新帧年龄中位 ~16 ms | 满足 10 Hz 采集 |
+| C920 + D435i 双路并行 | 两路均 ~30 Hz；无 timeout/掉帧 | 当前 USB 拓扑可双开 |
+
+2026-07-27 更换 USB 转接后，双相机可同时打开；`opencv_index_hint` 以当日本机实测为准。若出现 `external_camera_stale` 或覆盖率下降，先查 USB 带宽与索引，再查 `ObservationSynchronizer` 的 `max_external_camera_age_ms`。
+
+### FOV 验收（2026-07-27）
+
+验收方式：**在线预览**（teleop `--enable-cameras` 或等价 OpenCV 预览），目视确认：
+
+1. 拾取区三色块活动范围在画面内；
+2. 右侧 A4 整张可见，UP/DOWN 半区可辨；
+3. 支架紧固后位姿在 Phase 1 采集期间保持固定。
+
+**未做**：基于 external 外参的 base 系落点自动判定；放置成功与否仍靠人眼 + `replay_episode`。
+
+若支架松动、碰撞或整机搬迁，须重新 FOV 验收；不必为验收重复 7/24 的专用 motion smoke。
+
+### Pilot 与 export 参考（2026-07-27）
+
+`shape_pick_place_v1` 三条 pilot（001/002/003）经 `check_episode`：**external 步覆盖率 100%**；导出 LeRobot 视频为 `observation.images.external`，shape `480×640×3` HWC uint8（与 ADR 0002 一致）。
+
+## shape_pick_place_v1 工作区（2026-07-27）
+
+本节记录 **pick-and-place 任务卡** 对应的软件工作区与现场几何摘要；完整任务语义见 [`tasks/shape_pick_place_v1.md`](tasks/shape_pick_place_v1.md)。
+
+### 拾取区（base 系，单位 m）
+
+| 参数 | 值 |
+| --- | ---: |
+| `pick_x` | −0.42 ～ −0.15 |
+| `pick_y` | −0.09 ～ 0.17 |
+| 物体最小间距 | 0.03 |
+
+拾取区内每 episode 随机摆放三色块位姿；A4 放置区为**固定地标**（Phase 1–3 不写 base 矩形，靠视觉识别 UP/DOWN 半区）。
+
+### 软件工作区多边形
+
+安全过滤按**夹爪尖端** XY 校验（竖直向下时法兰 Z 偏移 **0.178 m**），不是法兰 XY  alone。
+
+2026-07-27 自旧 stamp 四边形**外扩**，覆盖拾取区四角并留约 **20 mm** 余量；`polygon_xy_m` 现为 **7 顶点**凸多边形（模板见 `configs/robot/rm65_safety.example.yaml`）。具体顶点坐标保存在本机 `configs/local/rm65_safety.local.yaml`。
+
+验收命令：
+
+```text
+python scripts/check_workspace_pick_zone.py
+```
+
+拾取区更新或桌面布置变化后必须重跑；未 PASS 不得开正式采集。
+
+### 高度与 ready pose
+
+| 项 | 值 | 说明 |
+| --- | --- | --- |
+| `min_flange_z_m` | **0.158** m | 2026-07-27 自 0.178 m 下调 20 mm，便于夹爪触及桌面物体 |
+| Ready 关节角 | `[0, 0, 90, 0, 90, 0]` deg | `configs/collection/manual_cartesian.yaml` → `ready_pose` |
+| 夹爪 ready 开度 | `working_open_fraction`（本机 yaml） | pilot 使用半开；teleop 右键边沿开合 |
+| 夹爪尖端净空 | > 150 mm @ ready | 任务卡 §4.1 |
+
+真机 pilot 在扩展工作区与调低 `min_flange_z_m` 后完成 `red→up`（×2）与 `red→down`（×1）；`safety_intervened` 比例因限速/工作区/IK 仍可能偏高，属预期，见 ADR 0002 `diag.safety_intervened`。
+
+### 与旧 stamp 工作区的关系
+
+旧 stamp 四边形顶点（2026-07-23/24）仍作为历史参考记录在本文 RM-65B 软件限位一节；**当前采集以扩展后的 local 多边形为准**。仅当机械臂底座、桌面或夹爪安装相对 stamp 时代未变时，才可类比旧边界；拾取区 y≈0.17 m 曾导致越界，已通过外扩 polygon 解决。
 
 ## SpaceMouse
 

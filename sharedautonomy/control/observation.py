@@ -20,6 +20,7 @@ from sharedautonomy.devices.cameras import (
     RealSenseRgbdCamera,
     UvcRgbCamera,
 )
+from sharedautonomy.devices.uvc_resolve import build_resolved_uvc_opencv_index
 
 
 class CartesianProprioceptiveSource:
@@ -106,12 +107,25 @@ def build_camera_session_from_config(
             warmup_frames=int(config.wrist.get("warmup_frames", 60)),
         )
     if config.external is not None:
-        opencv_index = config.external.get("opencv_index_hint")
+        resolved_index = build_resolved_uvc_opencv_index(
+            friendly_name=config.external.get("friendly_name"),
+            device_name_contains=config.external.get("device_name_contains"),
+            vendor_id=config.external.get("vendor_id"),
+            product_id=config.external.get("product_id"),
+            opencv_index_hint=config.external.get("opencv_index_hint"),
+            opencv_index=config.external.get("opencv_index"),
+        )
         external_camera = UvcRgbCamera(
             width=int(config.external.get("width", 640)),
             height=int(config.external.get("height", 480)),
             fps=int(config.external.get("fps", 30)),
-            opencv_index=int(0 if opencv_index is None else opencv_index),
+            opencv_index=resolved_index,
+            friendly_name=config.external.get("friendly_name"),
+            device_name_contains=config.external.get("device_name_contains"),
+            vendor_id=config.external.get("vendor_id"),
+            product_id=config.external.get("product_id"),
+            opencv_index_hint=config.external.get("opencv_index_hint"),
+            opencv_backend=config.external.get("opencv_backend", "dshow"),
             warmup_frames=int(config.external.get("warmup_frames", 60)),
         )
     sync_payload = config.sync or {}

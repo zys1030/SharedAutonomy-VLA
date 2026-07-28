@@ -56,4 +56,4 @@ docs/daily/YYYY-MM-DD/
 | 2026-07-24 | [plan](2026-07-24/plan.md) | [log](2026-07-24/log.md) | 已完成（采集闭环 + check/replay） |
 | 2026-07-25 ~ 2026-07-26 | — | — | 休息 |
 | 2026-07-27 | [plan](2026-07-27/plan.md) | [log](2026-07-27/log.md) | 已完成（pilot + LeRobot export 最小版） |
-| 2026-07-28 | [plan](2026-07-28/plan.md) | — | 进行中（ACT smoke + 正式采集起步） |
+| 2026-07-28 | [plan](2026-07-28/plan.md) | — | 进行中（ACT smoke 已过；正式采集 / log 待收工） |

@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 
 from sharedautonomy.data.schema import CameraFrame, SampleTimestamp
+from sharedautonomy.devices.uvc_resolve import resolve_opencv_backend, resolve_uvc_opencv_index
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +170,13 @@ class UvcRgbCamera:
     width: int = 640
     height: int = 480
     fps: int = 30
-    opencv_index: int = 0
+    opencv_index: int | None = None
+    opencv_index_hint: int | None = None
+    friendly_name: str | None = None
+    device_name_contains: str | None = None
+    vendor_id: str | None = None
+    product_id: str | None = None
+    opencv_backend: str | None = "dshow"
     warmup_frames: int = 60
 
     _buffer: _LatestFrameBuffer = field(default_factory=_LatestFrameBuffer, init=False, repr=False)
@@ -185,11 +192,23 @@ class UvcRgbCamera:
         except ImportError as exc:
             raise RuntimeError("opencv-python (cv2) is required for UvcRgbCamera") from exc
 
-        backend = cv2.CAP_DSHOW if hasattr(cv2, "CAP_DSHOW") else cv2.CAP_ANY
-        capture = cv2.VideoCapture(int(self.opencv_index), backend)
+        backend = resolve_opencv_backend(self.opencv_backend)
+        if backend is None:
+            backend = cv2.CAP_DSHOW if hasattr(cv2, "CAP_DSHOW") else cv2.CAP_ANY
+        if self.opencv_index is not None:
+            opencv_index = int(self.opencv_index)
+        else:
+            opencv_index = resolve_uvc_opencv_index(
+                friendly_name=self.friendly_name,
+                device_name_contains=self.device_name_contains,
+                vendor_id=self.vendor_id,
+                product_id=self.product_id,
+                opencv_index_hint=self.opencv_index_hint,
+            )
+        capture = cv2.VideoCapture(int(opencv_index), backend)
         if not capture.isOpened():
             capture.release()
-            raise RuntimeError(f"Failed to open UVC camera at OpenCV index {self.opencv_index}")
+            raise RuntimeError(f"Failed to open UVC camera at OpenCV index {opencv_index}")
         capture.set(cv2.CAP_PROP_FRAME_WIDTH, float(self.width))
         capture.set(cv2.CAP_PROP_FRAME_HEIGHT, float(self.height))
         capture.set(cv2.CAP_PROP_FPS, float(self.fps))
@@ -248,12 +267,12 @@ class CameraSession:
     external_camera: UvcRgbCamera | MockRgbCamera | None = None
 
     def start(self) -> None:
-        if self.wrist_camera is not None:
-            logger.info("Starting wrist RGB-D camera")
-            self.wrist_camera.start()
         if self.external_camera is not None:
             logger.info("Starting external RGB camera")
             self.external_camera.start()
+        if self.wrist_camera is not None:
+            logger.info("Starting wrist RGB-D camera")
+            self.wrist_camera.start()
 
     def stop(self) -> None:
         if self.external_camera is not None:

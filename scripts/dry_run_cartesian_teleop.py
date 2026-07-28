@@ -42,6 +42,7 @@ from sharedautonomy.robot.kinematics import RealManInverseKinematics
 from sharedautonomy.robot.ready_pose import load_ready_pose_config, move_arm_to_ready_joints
 from sharedautonomy.robot.realtime_state import RealManRealtimeStateSource
 from sharedautonomy.robot.safety import CartesianSafetyError, validate_cartesian_segment
+from sharedautonomy.tasks.shape_pick_place_v1 import resolve_episode_task_text
 
 
 def parse_args() -> argparse.Namespace:
@@ -144,8 +145,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--task-id", default="teleop-smoke", help="Task id stored in episode metadata")
     parser.add_argument(
         "--task-text",
-        default="Manual Cartesian teleop smoke recording.",
-        help="Task description stored in episode metadata",
+        default=None,
+        help=(
+            "Task description in episode metadata. If omitted and both "
+            "--source-object and --destination are set, uses the shape_pick_place_v1 "
+            "standard sentence from the task card."
+        ),
     )
     parser.add_argument(
         "--source-object",
@@ -229,6 +234,11 @@ def _load_config_enable_motion(*, cli_config_enable_motion: bool) -> tuple[bool,
 
 def main() -> int:
     args = parse_args()
+    args.task_text = resolve_episode_task_text(
+        task_text=args.task_text,
+        source_object=args.source_object,
+        destination=args.destination,
+    )
     config_enable_motion, config_source = _load_config_enable_motion(
         cli_config_enable_motion=args.config_enable_motion
     )

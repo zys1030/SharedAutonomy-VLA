@@ -6,14 +6,15 @@
 
 ## 当前状态
 
-- 当前阶段：**Week 1 已关闭** → **Manual 双轨扩量期**（先采+训，再训+SA）
-- 最近完成的每日计划：[2026-07-28 plan](daily/2026-07-28/plan.md)（Day 4：ACT smoke + Manual 扩量）
+- 当前阶段：**Week 1 已关闭** → **Week 1.5**（Manual 扩量 + ACT-Manual 真训已落地；下一步 rollout / 更大 `_v00N`）
+- 最近完成的每日计划：[2026-07-28 plan](daily/2026-07-28/plan.md)（Day 4：ACT smoke + Manual 扩量 + ACT-Manual 真训）
 - 最近工作日志：[2026-07-28 log](daily/2026-07-28/log.md)
-- 下一步主线（2026-07-28 拍板）：
-  1. **近期**：本机继续 Manual 扩量采集；服务器用 `v002`（12 条）跑 ACT-Manual **真训**（不预期效果；标定 pipeline 与耗时）；
-  2. **数据量够后再并行**：继续训 / 重训 ACT-Manual（含真机 rollout）∥ 开工 Week 2 SharedAutonomy **采集器**工程；
-  3. **正式 SA 对照采集**不抢在 Manual 闭环与 SA runner 稳定之前；
-  4. `v002` 仅作种子 / 第一版 ACT-Manual。
+- 下一步主线（2026-07-28 更新）：
+  1. **已完成**：本机 Manual **60 条**（6 组合 × 10；batch check 全 PASS）；服务器 `v002`（12 条种子）ACT-Manual 真训至 **50k**（`act_manual_v002`）；
+  2. **近期**：真机 / 云端推理 rollout（held-out 位姿）；按失败模式决定是否继续扩量与 export `_v003`；
+  3. **数据量够 / rollout 有结论后再并行**：重训 ACT-Manual（更大集）∥ 开工 Week 2 SharedAutonomy **采集器**工程；
+  4. **正式 SA 对照采集**不抢在 Manual 闭环与 SA runner 稳定之前；
+  5. `v002` 仅作种子 / 第一版 ACT-Manual；60 条 native 尚未进新 LeRobot snapshot。
 
 ## Week 1：硬件、数据与最小训练闭环
 
@@ -102,14 +103,19 @@ lerobot-train \
 
 > 2026-07-28 调整：不要求「先做完 SharedAutonomy 再碰真训」。先用 Manual 闭合采集–训练–部署，并用 rollout 回答「要多少数据」。
 
-- [ ] Manual 继续扩量（在 12 条种子之上；按条件补条数，失败不硬计入）；
-- [ ] ACT-Manual 真训（先用 `v002`，后续换更大 `_v00N`）；记录命令、步数、墙钟耗时；
+- [x] Manual 继续扩量（在 12 条种子之上；按条件补条数，失败不硬计入）；
+  - **60 条** train（3 色 × 2 区 × 10；`shape-pick-place-train-001`…`060`）；`summarize_episode_conditions` 均衡；`batch_check_episodes` 60/60 PASS（2026-07-28）；
+  - 辅助脚本：`scripts/summarize_episode_conditions.py`、`scripts/batch_check_episodes.py`；
+- [x] ACT-Manual 真训（先用 `v002`，后续换更大 `_v00N`）；记录命令、步数、墙钟耗时；
+  - `outputs/train/act_manual_v002`：先 3k 再 resume 至 **50k**；`batch_size=2`；单卡；~9–15 step/s；checkpoint `.../checkpoints/last/pretrained_model/`；
 - [ ] 真机 rollout（小规模 held-out 位姿）；用失败模式决定下一波采集量；
 - [ ] （并行，可稍后启动）Week 2 SharedAutonomy 采集器工程——见下节。
 
 验收标准（本插入阶段）：
 
 > 能在服务器稳定跑完非 smoke 的 ACT-Manual；至少做过一轮真机 rollout，并形成「还要多少 Manual 数据」的判断。
+
+（真训已闭合；rollout 与「还要多少数据」的判断仍开放。）
 
 ## Week 2：SharedAutonomy 采集器
 

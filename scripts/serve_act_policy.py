@@ -1,0 +1,187 @@
+"""HTTP server: cloud ACT inference (no robot motion).
+
+Runs on the GPU training machine. Uses only the stdlib HTTP stack (no FastAPI).
+
+Endpoints:
+  GET  /health
+  POST /infer           JSON observation (HWC uint8 images + state + task) -> action
+  POST /infer_dataset   server-side dataset frame smoke (no image upload)
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import sys
+import traceback
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
+
+from sharedautonomy.policies.act.protocol import (
+    payload_to_observation,
+    response_to_payload,
+)
+from sharedautonomy.policies.act.runtime import ActInferenceRuntime, ActRuntimeConfig
+
+logger = logging.getLogger(__name__)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Serve ACT policy over HTTP for cloud inference smoke. "
+            "Does not connect to robot hardware or enable motion."
+        )
+    )
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=Path("outputs/train/act_manual_v002/checkpoints/last/pretrained_model"),
+        help="Path to ACT pretrained_model directory",
+    )
+    parser.add_argument(
+        "--dataset-repo-id",
+        default="local/shape_pick_place_v1",
+        help="LeRobot repo id used for dataset stats / infer_dataset",
+    )
+    parser.add_argument(
+        "--dataset-root",
+        type=Path,
+        default=Path("outputs/datasets/shape_pick_place_v1_v002"),
+        help="Local dataset root on the server (stats + optional smoke frames)",
+    )
+    parser.add_argument("--host", default="0.0.0.0", help="Bind address (default 0.0.0.0)")
+    parser.add_argument("--port", type=int, default=8088, help="Bind port (default 8088)")
+    parser.add_argument("--device", default="cuda", help="Torch device (cuda|cpu)")
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=("DEBUG", "INFO", "WARNING", "ERROR"),
+    )
+    return parser.parse_args()
+
+
+def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict[str, Any]) -> None:
+    body = json.dumps(payload).encode("utf-8")
+    handler.send_response(status)
+    handler.send_header("Content-Type", "application/json; charset=utf-8")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+def _read_json(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
+    length = int(handler.headers.get("Content-Length", "0"))
+    raw = handler.rfile.read(length) if length > 0 else b"{}"
+    payload = json.loads(raw.decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("JSON body must be an object")
+    return payload
+
+
+def make_handler(runtime: ActInferenceRuntime) -> type[BaseHTTPRequestHandler]:
+    class ActInferHandler(BaseHTTPRequestHandler):
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            logger.info("%s - %s", self.address_string(), format % args)
+
+        def do_GET(self) -> None:  # noqa: N802
+            path = urlparse(self.path).path
+            if path == "/health":
+                _json_response(
+                    self,
+                    200,
+                    {
+                        "ok": True,
+                        "loaded": runtime.is_loaded,
+                        "checkpoint": str(runtime.config.checkpoint_dir),
+                        "dataset_root": str(runtime.config.dataset_root),
+                        "device": runtime.config.device,
+                    },
+                )
+                return
+            _json_response(self, 404, {"ok": False, "error": f"unknown path {path}"})
+
+        def do_POST(self) -> None:  # noqa: N802
+            path = urlparse(self.path).path
+            try:
+                if path == "/infer":
+                    payload = _read_json(self)
+                    obs = payload_to_observation(payload)
+                    result = runtime.infer(obs)
+                    _json_response(self, 200, {"ok": True, **response_to_payload(result)})
+                    return
+                if path == "/infer_dataset":
+                    payload = _read_json(self)
+                    episode_index = int(payload["episode_index"])
+                    frame_index = int(payload.get("frame_index", 0))
+                    reset = bool(payload.get("reset", False))
+                    task_override = payload.get("task")
+                    obs, result = runtime.infer_dataset_frame(
+                        episode_index=episode_index,
+                        frame_index=frame_index,
+                        reset=reset,
+                        task_override=str(task_override) if task_override is not None else None,
+                    )
+                    response: dict[str, Any] = {
+                        "ok": True,
+                        **response_to_payload(result),
+                        "echo_task": obs.task,
+                        "echo_state": np_state_list(obs),
+                    }
+                    _json_response(self, 200, response)
+                    return
+                _json_response(self, 404, {"ok": False, "error": f"unknown path {path}"})
+            except Exception as exc:  # noqa: BLE001 — return error to client
+                logger.exception("infer request failed")
+                _json_response(
+                    self,
+                    400,
+                    {
+                        "ok": False,
+                        "error": str(exc),
+                        "traceback": traceback.format_exc(limit=5),
+                    },
+                )
+
+    return ActInferHandler
+
+
+def np_state_list(obs: Any) -> list[float]:
+    return [float(x) for x in obs.state.tolist()]
+
+
+def main() -> int:
+    args = parse_args()
+    logging.basicConfig(
+        level=getattr(logging, args.log_level),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+    runtime = ActInferenceRuntime(
+        ActRuntimeConfig(
+            checkpoint_dir=args.checkpoint.resolve(),
+            dataset_repo_id=args.dataset_repo_id,
+            dataset_root=args.dataset_root.resolve(),
+            device=args.device,
+        )
+    )
+    runtime.load()
+
+    handler = make_handler(runtime)
+    server = ThreadingHTTPServer((args.host, args.port), handler)
+    logger.info("ACT infer server listening on http://%s:%s", args.host, args.port)
+    logger.info("Endpoints: GET /health  POST /infer  POST /infer_dataset")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        logger.info("Shutting down")
+    finally:
+        server.server_close()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

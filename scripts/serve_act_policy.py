@@ -85,6 +85,10 @@ def _read_json(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
 
 def make_handler(runtime: ActInferenceRuntime) -> type[BaseHTTPRequestHandler]:
     class ActInferHandler(BaseHTTPRequestHandler):
+        # HTTP/1.1 enables keep-alive so control-loop clients can reuse one TCP
+        # connection instead of paying a handshake per 10Hz step.
+        protocol_version = "HTTP/1.1"
+
         def log_message(self, format: str, *args: object) -> None:  # noqa: A003
             logger.info("%s - %s", self.address_string(), format % args)
 

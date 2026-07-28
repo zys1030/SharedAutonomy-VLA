@@ -7,13 +7,13 @@ Requires the cloud ``serve_act_policy.py`` process to be running.
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import logging
 import sys
 import time
-import urllib.error
-import urllib.request
 from typing import Any
+from urllib.parse import urlparse
 
 import numpy as np
 from sharedautonomy.control.observation import (
@@ -157,32 +157,76 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _http_json(
-    method: str,
-    url: str,
-    *,
-    payload: dict[str, Any] | None = None,
-    timeout_s: float,
-) -> dict[str, Any]:
-    data = None if payload is None else json.dumps(payload).encode("utf-8")
-    request = urllib.request.Request(
-        url,
-        data=data,
-        method=method,
-        headers={"Content-Type": "application/json"} if data is not None else {},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout_s) as response:
-            body = response.read().decode("utf-8")
-            result = json.loads(body)
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"HTTP {exc.code} from {url}: {detail}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"Failed to reach {url}: {exc}") from exc
-    if not isinstance(result, dict):
-        raise RuntimeError(f"Expected JSON object from {url}")
-    return result
+class _JsonHttpClient:
+    """Persistent-connection JSON client (HTTP/1.1 keep-alive).
+
+    One TCP connection is reused across control-loop steps; a stale or broken
+    connection is dropped and the request retried once on a fresh connection.
+    """
+
+    def __init__(self, base_url: str, *, timeout_s: float) -> None:
+        parsed = urlparse(base_url)
+        if parsed.scheme != "http" or not parsed.hostname:
+            raise ValueError(f"only http:// URLs are supported, got {base_url!r}")
+        self._host = parsed.hostname
+        self._port = parsed.port or 80
+        self._base_url = base_url.rstrip("/")
+        self._timeout_s = float(timeout_s)
+        self._conn: http.client.HTTPConnection | None = None
+
+    def _connection(self, timeout_s: float) -> http.client.HTTPConnection:
+        if self._conn is None:
+            self._conn = http.client.HTTPConnection(self._host, self._port, timeout=timeout_s)
+        elif self._conn.sock is not None:
+            self._conn.sock.settimeout(timeout_s)
+        else:
+            self._conn.timeout = timeout_s
+        return self._conn
+
+    def close(self) -> None:
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        payload: dict[str, Any] | None,
+        timeout_s: float,
+    ) -> dict[str, Any]:
+        body = None if payload is None else json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json"} if body is not None else {}
+        raw = b""
+        status = 0
+        for attempt in (0, 1):
+            conn = self._connection(timeout_s)
+            try:
+                conn.request(method, path, body=body, headers=headers)
+                response = conn.getresponse()
+                status = response.status
+                raw = response.read()
+                break
+            except (http.client.HTTPException, OSError) as exc:
+                self.close()
+                if attempt == 1:
+                    raise RuntimeError(
+                        f"Failed to reach {self._base_url}{path}: {exc}"
+                    ) from exc
+        if status != 200:
+            detail = raw.decode("utf-8", errors="replace")
+            raise RuntimeError(f"HTTP {status} from {self._base_url}{path}: {detail}")
+        result = json.loads(raw.decode("utf-8"))
+        if not isinstance(result, dict):
+            raise RuntimeError(f"Expected JSON object from {self._base_url}{path}")
+        return result
+
+    def get(self, path: str, *, timeout_s: float) -> dict[str, Any]:
+        return self._request("GET", path, payload=None, timeout_s=timeout_s)
+
+    def post(self, path: str, payload: dict[str, Any], *, timeout_s: float) -> dict[str, Any]:
+        return self._request("POST", path, payload=payload, timeout_s=timeout_s)
 
 
 def _ensure_hwc_rgb_uint8(image: np.ndarray, *, height: int, width: int) -> np.ndarray:
@@ -317,7 +361,8 @@ def main() -> int:
         total_steps = max(1, int(round(float(args.duration_s) * float(args.control_hz))))
 
     base = str(args.infer_url).rstrip("/")
-    health = _http_json("GET", f"{base}/health", timeout_s=min(10.0, float(args.timeout_s)))
+    http_client = _JsonHttpClient(base, timeout_s=float(args.timeout_s))
+    health = http_client.get("/health", timeout_s=min(10.0, float(args.timeout_s)))
     if not health.get("ok"):
         raise RuntimeError(f"ACT server health check failed: {health}")
 
@@ -431,10 +476,9 @@ def main() -> int:
             encode_ms_list.append(encode_ms)
 
             t0 = time.perf_counter()
-            result = _http_json(
-                "POST",
-                f"{base}/infer",
-                payload=payload,
+            result = http_client.post(
+                "/infer",
+                payload,
                 timeout_s=float(args.timeout_s),
             )
             rtt_ms = (time.perf_counter() - t0) * 1000.0
@@ -487,6 +531,7 @@ def main() -> int:
         }
         print(json.dumps({"done": summary}, indent=2), flush=True)
     finally:
+        http_client.close()
         camera_session.stop()
         backend.disconnect()
     return 0

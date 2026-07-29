@@ -10,6 +10,7 @@ import argparse
 import http.client
 import json
 import logging
+import socket
 import sys
 import time
 from typing import Any
@@ -157,6 +158,15 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+class _NoDelayHTTPConnection(http.client.HTTPConnection):
+    """HTTPConnection with TCP_NODELAY (disable Nagle for small RPC payloads)."""
+
+    def connect(self) -> None:
+        super().connect()
+        if self.sock is not None:
+            self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
+
 class _JsonHttpClient:
     """Persistent-connection JSON client (HTTP/1.1 keep-alive).
 
@@ -176,7 +186,7 @@ class _JsonHttpClient:
 
     def _connection(self, timeout_s: float) -> http.client.HTTPConnection:
         if self._conn is None:
-            self._conn = http.client.HTTPConnection(self._host, self._port, timeout=timeout_s)
+            self._conn = _NoDelayHTTPConnection(self._host, self._port, timeout=timeout_s)
         elif self._conn.sock is not None:
             self._conn.sock.settimeout(timeout_s)
         else:

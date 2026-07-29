@@ -9,6 +9,7 @@ import argparse
 import json
 import logging
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -75,6 +76,12 @@ def parse_args() -> argparse.Namespace:
         help="Only for --mode dataset-local",
     )
     parser.add_argument("--timeout-s", type=float, default=120.0)
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help="Only for --mode health: repeat the request N times and report per-call rtt_ms",
+    )
     parser.add_argument(
         "--image-encoding",
         choices=(JPEG_IMAGE_ENCODING, RAW_IMAGE_ENCODING),
@@ -161,8 +168,20 @@ def main() -> int:
     base = args.url.rstrip("/")
 
     if args.mode == "health":
-        result = _http_json("GET", f"{base}/health", timeout_s=args.timeout_s)
+        rtts_ms: list[float] = []
+        result: dict[str, Any] = {}
+        for _ in range(max(1, int(args.repeat))):
+            t0 = time.perf_counter()
+            result = _http_json("GET", f"{base}/health", timeout_s=args.timeout_s)
+            rtts_ms.append((time.perf_counter() - t0) * 1000.0)
         print(json.dumps(result, indent=2))
+        if rtts_ms:
+            print(
+                "health rtt_ms:",
+                [round(x, 1) for x in rtts_ms],
+                "mean:",
+                round(float(np.mean(rtts_ms)), 1),
+            )
         return 0 if result.get("ok") else 1
 
     if args.mode == "dataset-remote":

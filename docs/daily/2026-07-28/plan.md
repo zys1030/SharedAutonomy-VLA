@@ -122,9 +122,11 @@
   - 字段、单位、checkpoint 路径、启动命令 → 已补 [log.md](log.md)；
 - [x] **D. 本机哑 client 实机打通（~15 min）**
   - 服务器 serve；本机 `client_act_infer.py --mode dataset-remote` 已通；**未**开相机/臂/运动。
-- [ ] （可选余时）`dataset-local` 传图对照；连续多帧 / 延迟粗测。
+- [x] （可选余时）`dataset-local` 传图对照；连续多帧 / 延迟粗测。
+  - 深夜 session 完成：localhost raw vs JPEG 对照、dry-run 200 步连续延迟测量 ×2 轮（见 log）。
 - [x] **真机观测 dry-run**：`scripts/dry_run_act_observe_infer.py`（相机+UDP → `/infer`，**不下发**）；ready 下开环 OK；RTT~550ms 记入 log。
-- [ ] （换 session）压 RTT / 修 `infer_dataset` / safety+开运动。
+- [x] （换 session）压 RTT：JPEG 压缩 + 分段计时 + keep-alive + TCP_NODELAY；**500–600 → ~110ms**；归因定论 = 上行带宽地板，阻塞式触顶（见 log）。
+- [ ] （延期）修 `infer_dataset`（frame0 时间戳 / 索引 fallback 全库扫描）；safety + 开运动 → 下一工作日。
 
 ### P1：有时间再做
 

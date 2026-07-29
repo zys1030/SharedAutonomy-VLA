@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import socket
 import sys
 import time
 import traceback
@@ -67,11 +68,20 @@ def parse_args() -> argparse.Namespace:
 
 def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict[str, Any]) -> None:
     body = json.dumps(payload).encode("utf-8")
-    handler.send_response(status)
+    # send_response() logs the request and adds Server/Date headers;
+    # replicate both while keeping headers+body in ONE wfile.write below.
+    handler.log_request(status)
+    handler.send_response_only(status)
+    handler.send_header("Server", handler.version_string())
+    handler.send_header("Date", handler.date_time_string())
     handler.send_header("Content-Type", "application/json; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
-    handler.end_headers()
-    handler.wfile.write(body)
+    # End-of-headers CRLF, then flush headers and body as a single segment.
+    # Measured: with two separate writes the tiny body segment arrived ~50ms
+    # after the headers on the client (2026-07-29 bench_infer_connection).
+    handler._headers_buffer.append(b"\r\n")
+    handler.wfile.write(b"".join(handler._headers_buffer) + body)
+    handler._headers_buffer = []
 
 
 def _read_json(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
@@ -88,6 +98,10 @@ def make_handler(runtime: ActInferenceRuntime) -> type[BaseHTTPRequestHandler]:
         # HTTP/1.1 enables keep-alive so control-loop clients can reuse one TCP
         # connection instead of paying a handshake per 10Hz step.
         protocol_version = "HTTP/1.1"
+
+        def setup(self) -> None:
+            super().setup()
+            self.connection.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
         def log_message(self, format: str, *args: object) -> None:  # noqa: A003
             logger.info("%s - %s", self.address_string(), format % args)

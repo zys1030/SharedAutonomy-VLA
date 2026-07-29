@@ -6,12 +6,12 @@
 
 ## 当前状态
 
-- 当前阶段：**Week 1 已关闭** → **Week 1.5**（Manual 扩量 + ACT-Manual 真训已落地；下一步 rollout / 更大 `_v00N`）
+- 当前阶段：**Week 1.5 首轮回合已闭合**（Manual 60 条 + v003 真训 + 真机 rollout 9 次）→ 下一步 **条件分辨导向扩量 / `_v004` 重训**；Week 2 SA 采集器可并行开工
 - 最近完成的每日计划：[2026-07-28 plan](daily/2026-07-28/plan.md)（Day 4：ACT smoke + Manual 扩量 + ACT-Manual 真训）
 - 最近工作日志：[2026-07-28 log](daily/2026-07-28/log.md)
 - 下一步主线（2026-07-28 更新）：
   1. **已完成**：本机 Manual **60 条**（6 组合 × 10；batch check 全 PASS）；服务器 `v002`（12 条种子）ACT-Manual 真训至 **50k**（`act_manual_v002`）；
-  2. **近期**：真机 / 云端推理 rollout（held-out 位姿）；按失败模式决定是否继续扩量与 export `_v003`；
+  2. **近期**：条件分辨导向 Manual 扩量 → export `_v004` → 重训 → 小规模 rollout 复测；
   3. **数据量够 / rollout 有结论后再并行**：重训 ACT-Manual（更大集）∥ 开工 Week 2 SharedAutonomy **采集器**工程；
   4. **正式 SA 对照采集**不抢在 Manual 闭环与 SA runner 稳定之前；
   5. `v002` 仅作种子 / 第一版 ACT-Manual；60 条 native 尚未进新 LeRobot snapshot。
@@ -108,14 +108,15 @@ lerobot-train \
   - 辅助脚本：`scripts/summarize_episode_conditions.py`、`scripts/batch_check_episodes.py`；
 - [x] ACT-Manual 真训（先用 `v002`，后续换更大 `_v00N`）；记录命令、步数、墙钟耗时；
   - `outputs/train/act_manual_v002`：先 3k 再 resume 至 **50k**；`batch_size=2`；单卡；~9–15 step/s；checkpoint `.../checkpoints/last/pretrained_model/`；
-- [ ] 真机 rollout（小规模 held-out 位姿）；用失败模式决定下一波采集量；
+- [x] 真机 rollout（小规模 held-out 位姿）；用失败模式决定下一波采集量；
+  - 2026-07-29：`act_manual_v003`，9 次，**0/9 成功**；链路成立；主瓶颈为 6 条件绑定与 grasp，非 RTT；见 `docs/daily/2026-07-29/log.md`；
 - [ ] （并行，可稍后启动）Week 2 SharedAutonomy 采集器工程——见下节。
 
 验收标准（本插入阶段）：
 
 > 能在服务器稳定跑完非 smoke 的 ACT-Manual；至少做过一轮真机 rollout，并形成「还要多少 Manual 数据」的判断。
 
-（真训已闭合；rollout 与「还要多少数据」的判断仍开放。）
+（真训与 rollout 首轮回合已闭合；「还要多少数据」第一版判断：**60 条不足，需条件分辨导向扩量**。）
 
 ## Week 2：SharedAutonomy 采集器
 

@@ -47,6 +47,7 @@
 | --- | --- |
 | `docs/overview.md` | 需要项目背景、架构、任务定义时 |
 | `docs/roadmap.md` | 规划阶段任务或核对验收标准时 |
+| `docs/datasets.md` | 核对采集池 / 导出快照 / 训练对应关系时 |
 | `docs/daily/README.md` | 创建/更新每日 plan 或 log 时 |
 | `docs/hardware_setup.md` | 真机联调、安全验证时 |
 | `docs/engineering_conventions.md` | 改代码风格、日志、配置约定时 |

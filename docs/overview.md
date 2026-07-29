@@ -1,6 +1,6 @@
 # 项目背景与系统设计
 
-本文档维护 SharedAutonomy-VLA 的长期稳定说明：研究问题、任务定义、系统架构、数据格式、评测协议与交付物。阶段进度见 [roadmap.md](roadmap.md)；每日执行见 [daily/](daily/)；硬件验证见 [hardware_setup.md](hardware_setup.md)。
+本文档维护 SharedAutonomy-VLA 的长期稳定说明：研究问题、任务定义、系统架构、数据格式、评测协议与交付物。阶段进度见 [roadmap.md](roadmap.md)；采集与导出快照清单见 [datasets.md](datasets.md)；每日执行见 [daily/](daily/)；硬件验证见 [hardware_setup.md](hardware_setup.md)。
 
 ---
 

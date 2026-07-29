@@ -251,17 +251,54 @@ python scripts/dry_run_act_observe_infer.py --ip 192.168.1.19 --infer-url http:/
 ```
 
 ```powershell
+# ============================================================
 # 本机 → 服务器：git bundle 离线同步（GitHub 不可达时）
-# 本机：先 commit，再打包（首次用全量，之后用 <服务器HEAD>..main 增量）
-git bundle create sync.bundle main
+# 方向固定：本机打包 → scp → 服务器拉取。sync.bundle 是临时文件，不入库，用完即删。
+# ============================================================
+
+# 步骤 0（本机）：确认要同步的改动已 commit；工作区干净与否不影响 bundle
+git status
+git log --oneline -3
+
+# 步骤 1（本机）：查服务器当前 HEAD，作为增量 bundle 的基点
+ssh ustc17@202.38.78.65 "cd ~/SharedAutonomy-VLA && git rev-parse HEAD"
+#   输出形如：a1b2c3d4...  （下面记作 <服务器HEAD>）
+
+# 步骤 2（本机）：打 bundle
+#   日常增量（服务器已有历史，推荐）：
+git bundle create sync.bundle <服务器HEAD>..main
+#   首次全量（服务器还没有本仓库历史时才用，不带范围）：
+#   git bundle create sync.bundle main
+
+# 步骤 3（本机）：传到服务器家目录
 scp sync.bundle ustc17@202.38.78.65:~/
 
-# 服务器：仓库目录内校验 + 拉取；用完即删 bundle（不入库）
+# 步骤 4（服务器）：校验 + 拉取 + 删除临时 bundle
+ssh ustc17@202.38.78.65
 cd ~/SharedAutonomy-VLA
-git bundle verify ~/sync.bundle
-git pull ~/sync.bundle main
-rm ~/sync.bundle
-# 查服务器 HEAD（做增量 bundle 用）：ssh ustc17@202.38.78.65 "cd ~/SharedAutonomy-VLA && git rev-parse HEAD"
+git bundle verify ~/sync.bundle   # 应输出 "The bundle ... is okay"
+git pull ~/sync.bundle main       # 快进合并本机新提交
+rm ~/sync.bundle                  # 用完即删；本机的 sync.bundle 也删
+exit
+
+# 步骤 5（服务器）：若同步了 serve_act_policy.py / sharedautonomy/ 下的代码，
+# 必须重启 :8088 进程才生效（进程启动时 load 代码与 checkpoint）：
+ssh ustc17@202.38.78.65
+pgrep -af serve_act_policy.py     # 找到旧进程 PID 与启动参数
+kill <PID>                        # 停旧进程
+cd ~/SharedAutonomy-VLA
+conda activate sharedautonomy-train
+export CUDA_VISIBLE_DEVICES=0
+export HF_HUB_OFFLINE=1
+export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"
+nohup python scripts/serve_act_policy.py \
+  --checkpoint outputs/train/act_manual_v003/checkpoints/last/pretrained_model \
+  --dataset-root outputs/datasets/shape_pick_place_v1_v003 \
+  --host 0.0.0.0 --port 8088 --device cuda > serve_act_policy.log 2>&1 &
+#   等几秒（load checkpoint + CUDA warmup）后退出 SSH
+
+# 步骤 6（本机）：验证新进程已生效
+python scripts/client_act_infer.py --url http://202.38.78.65:8088 --mode health --repeat 5
 ```
 
 **接口约定（简）**

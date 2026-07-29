@@ -26,6 +26,7 @@ docs/daily/YYYY-MM-DD/
 - `log.md`：当天实际发生事项的历史记录，收工前整理；
 - [`../roadmap.md`](../roadmap.md)：阶段级目标和验收标准；
 - [`../overview.md`](../overview.md)：长期稳定的项目背景与系统设计；
+- [`../datasets.md`](../datasets.md)：native 采集池与 LeRobot 快照清单（export / 扩量后同步）；
 - [`../hardware_setup.md`](../hardware_setup.md)、[`../decisions/`](../decisions/)：长期有效的技术事实和设计决策。
 
 ## 每日流程
@@ -35,7 +36,7 @@ docs/daily/YYYY-MM-DD/
 3. 工作过程中勾选任务，并记录延期、取消或阻塞原因；
 4. 收工前从 [`templates/log.md`](templates/log.md) 创建当天 `log.md`；
 5. 用 15–30 分钟撰写日志中的 **「今日理解重点」**（默认 3–5 条；轻量日可精简到 2–3 条，但不可整节省略）；
-6. 将可长期复用的结论同步到对应主题文档，日志只保留摘要和链接；
+6. 将可长期复用的结论同步到对应主题文档，日志只保留摘要和链接；若当日有 export / 阶段性扩采 / 新训练 job，同步更新 [`../datasets.md`](../datasets.md)；
 7. 在日志末尾写下一工作日候选任务。
 
 ## 维护规则
@@ -57,4 +58,4 @@ docs/daily/YYYY-MM-DD/
 | 2026-07-25 ~ 2026-07-26 | — | — | 休息 |
 | 2026-07-27 | [plan](2026-07-27/plan.md) | [log](2026-07-27/log.md) | 已完成（pilot + LeRobot export 最小版） |
 | 2026-07-28 | [plan](2026-07-28/plan.md) | [log](2026-07-28/log.md) | 已完成（ACT smoke + 12 train + v002 + 60 扩量 + 真训 50k + 云端推理通路；RTT 500→110ms 归因关闭；Week 1 验收关） |
-| 2026-07-29 | [plan](2026-07-29/plan.md) | — | 进行中（首次真机 rollout） |
+| 2026-07-29 | [plan](2026-07-29/plan.md) | [log](2026-07-29/log.md) | 已完成（RTT 归因关闭 + 首次真机 rollout 0/9 + C0 课程 40 条采集 + act_c0/r2 训练与边际测量） |

@@ -6,15 +6,15 @@
 
 ## 当前状态
 
-- 当前阶段：**Week 1.5 首轮回合已闭合**（Manual 60 条 + v003 真训 + 真机 rollout 9 次）→ 下一步 **条件分辨导向扩量 / `_v004` 重训**；Week 2 SA 采集器可并行开工
-- 最近完成的每日计划：[2026-07-28 plan](daily/2026-07-28/plan.md)（Day 4：ACT smoke + Manual 扩量 + ACT-Manual 真训）
-- 最近工作日志：[2026-07-28 log](daily/2026-07-28/log.md)
-- 下一步主线（2026-07-28 更新）：
-  1. **已完成**：本机 Manual **60 条**（6 组合 × 10；batch check 全 PASS）；服务器 `v002`（12 条种子）ACT-Manual 真训至 **50k**（`act_manual_v002`）；
-  2. **近期**：条件分辨导向 Manual 扩量 → export `_v004` → 重训 → 小规模 rollout 复测；
-  3. **数据量够 / rollout 有结论后再并行**：重训 ACT-Manual（更大集）∥ 开工 Week 2 SharedAutonomy **采集器**工程；
-  4. **正式 SA 对照采集**不抢在 Manual 闭环与 SA runner 稳定之前；
-  5. `v002` 仅作种子 / 第一版 ACT-Manual；60 条 native 尚未进新 LeRobot snapshot。
+- 当前阶段：**Week 1.5 首轮闭环已闭合**；C0 / `act_c0_r3` 能闭合、偶发完整抓放，主瓶颈为 **水平对准偏差场（1–4cm，随位姿/yaw 变化）** → 下一步 **+20 分层抖动采集 → `act_c0_r4` → 格点厘米复测**；C1 / VLA 暂缓
+- 最近完成的每日计划：[2026-07-31 plan](daily/2026-07-31/plan.md)
+- 最近工作日志：[2026-07-31 log](daily/2026-07-31/log.md)
+- 下一步主线（2026-07-31 更新）：
+  1. **已完成**：Manual 60 / v003；C0 40 / `act_c0_r3`；`reset_every=25` 基线；水平偏差格点表 + 闭合 EE 散点；
+  2. **近期**：+20（14 clean 分层抖动 + 6 水平修正）→ `act_c0_r4` → 同格点表看偏差是否缩小；无效则停堆数据；
+  3. **C0 对准稳定后**：再进 C1 / `_v004`；Week 2 SA 采集器可并行；
+  4. **正式 SA 对照采集**不抢在 Manual/C0 闭环与 SA runner 稳定之前；
+  5. 现成 VLA LoRA 不当当前对准问题的捷径（可后续 smoke）。
 
 ## Week 1：硬件、数据与最小训练闭环
 

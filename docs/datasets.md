@@ -56,7 +56,7 @@
 | `shape_pick_place_v1_v001` | `pilot-001`…`003` | 3 / 1040    | red→up ×2，red→down ×1 | Phase 0/1 pilot；`phase: pilot` | `act_smoke_v001`（100 steps）     | 管道 smoke；**不作效果评估**            |
 | `shape_pick_place_v1_v002` | `train-001`…`012` | 12 / 2800   | 黄/红/蓝 × up/down × 2   | Phase 3 种子；三块在场；`phase: train` | `act_manual_v002`（50k）          | 首轮真训标定；勿覆盖                     |
 | `shape_pick_place_v1_v003` | `train-001`…`060` | 60 / 12886  | 6 组合 × 10             | Phase 3 扩量；含 v002 的 12 条       | `act_manual_v003`（150k）         | 真机 rollout 0/9；**保留**供后续 C3 混合 |
-| `shape_pick_place_v1_c0`   | `train-061`…`100` | 40 / 8701   | blue→up × 40（30 干净 + 10 纠偏段） | **C0**：单块、无干扰；`destination=up`；`081`…`090`、`091`…`100` 经 `--resume` 追加 | `act_c0`（20k）；`act_c0_r2`（30k）；`act_c0_r3`（30k，训练中） | 2026-07-29；已 scp 服务器 |
+| `shape_pick_place_v1_c0`   | `train-061`…`100` | 40 / 8701   | blue→up × 40（30 干净 + 10 纠偏段） | **C0**：单块、无干扰；`destination=up`；`081`…`090`、`091`…`100` 经 `--resume` 追加 | `act_c0`（20k）；`act_c0_r2`（30k）；`act_c0_r3`（30k） | 2026-07-29；已 scp 服务器；r3 rollout 十余次，至少 2 次完整抓取放置，恢复重试出现但低位会推块，打圈未改善 |
 
 
 计划中、尚未落地：
@@ -105,7 +105,7 @@ python scripts/batch_check_episodes.py --run-glob "shape-pick-place-train-*" --r
 | `outputs/train/act_manual_v003` | `.../shape_pick_place_v1_v003` | 150k    | 首次真机 rollout：链路通，6 条件绑定失败 |
 | `outputs/train/act_c0`          | `.../shape_pick_place_v1_c0`（20 ep） | 20k     | C0 初版；离线 MAE `mae_joints≈1.01°`；rollout 4 次：reaching 对、抓偏 ~3cm；**不** resume v003 |
 | `outputs/train/act_c0_r2`       | `.../shape_pick_place_v1_c0`（30 ep） | 30k     | rollout 3 次：明显改善，**1/3 抓起**（抓本体非把手，`grasp_wrong_height`）；打圈仍在；保留作对照 |
-| `outputs/train/act_c0_r3`       | `.../shape_pick_place_v1_c0`（**40 ep / 8701** frames，含 10 纠偏） | 30k（训练中） | 从头训不覆盖 r2；复测用 r2 同位姿前 2–3 次 |
+| `outputs/train/act_c0_r3`       | `.../shape_pick_place_v1_c0`（**40 ep / 8701** frames，含 10 纠偏） | 30k（已完成） | 能闭合（`reset_every=25`）；≥2 次完整抓放；主瓶颈水平偏差场 1–4cm；暂不收口；下一批拟 +20 → `act_c0_r4` |
 
 
 推理服务加载的是 checkpoint 目录（如 `.../checkpoints/last/pretrained_model`），与 dataset root 可分开指定；换策略时两者都要核对。

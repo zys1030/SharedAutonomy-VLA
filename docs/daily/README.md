@@ -59,3 +59,5 @@ docs/daily/YYYY-MM-DD/
 | 2026-07-27 | [plan](2026-07-27/plan.md) | [log](2026-07-27/log.md) | 已完成（pilot + LeRobot export 最小版） |
 | 2026-07-28 | [plan](2026-07-28/plan.md) | [log](2026-07-28/log.md) | 已完成（ACT smoke + 12 train + v002 + 60 扩量 + 真训 50k + 云端推理通路；RTT 500→110ms 归因关闭；Week 1 验收关） |
 | 2026-07-29 | [plan](2026-07-29/plan.md) | [log](2026-07-29/log.md) | 已完成（RTT 归因关闭 + 首次真机 rollout 0/9 + C0 课程 40 条采集 + act_c0/r2 训练与边际测量） |
+| 2026-07-31 | [plan](2026-07-31/plan.md) | [log](2026-07-31/log.md) | 已完成（act_c0_r3 复测：能闭合；水平偏差场定性；reset=25；+20 采集配方；下午出差提前收工） |
+| 2026-08-03 | [plan](2026-08-03/plan.md) | [log](2026-08-03/log.md) | 进行中（C0 60 / 13028 steps；`act_c0_r4` 100k；19 次 rollout、6 次完整抓放） |

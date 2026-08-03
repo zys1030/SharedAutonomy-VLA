@@ -1,5 +1,17 @@
 """Dataset schemas, recording, validation, and visualization."""
 
+from .critical_frames import (
+    CriticalFrameConfig,
+    CriticalFrameEpisode,
+    CriticalFrameIndex,
+    CriticalFrameIndexError,
+    EpisodeFrameRange,
+    build_critical_frame_index,
+    extract_gripper_open_fraction,
+    find_close_transitions,
+    load_critical_frame_index,
+    save_critical_frame_index,
+)
 from .episode_check import (
     EpisodeCheckReport,
     check_episode_dir,
@@ -56,6 +68,11 @@ __all__ = [
     "CameraFrame",
     "CollectionMode",
     "CoordinateFrame",
+    "CriticalFrameConfig",
+    "CriticalFrameEpisode",
+    "CriticalFrameIndex",
+    "CriticalFrameIndexError",
+    "EpisodeFrameRange",
     "EpisodeMetadata",
     "EpisodeRecorder",
     "EpisodeRecorderError",
@@ -74,7 +91,10 @@ __all__ = [
     "SyncedObservation",
     "check_episode_dir",
     "check_recorded_episode",
+    "build_critical_frame_index",
     "episode_check_report_to_dict",
+    "extract_gripper_open_fraction",
+    "find_close_transitions",
     "format_episode_check_report",
     "LeRobotExportError",
     "build_lerobot_features",
@@ -82,8 +102,10 @@ __all__ = [
     "export_lerobot_dataset",
     "export_single_episode",
     "iter_native_frames",
+    "load_critical_frame_index",
     "load_native_episode_envelope",
     "load_recorded_episode",
     "proprioceptive_sample_from_cartesian",
     "rpy_rad_to_quaternion_xyzw",
+    "save_critical_frame_index",
 ]

@@ -103,9 +103,9 @@ class SmolVLAInferenceRuntime:
         """Load model, PEFT adapter when needed, dataset stats, and processors."""
         try:
             import torch
+            from lerobot.configs.policies import PreTrainedConfig
             from lerobot.datasets.lerobot_dataset import LeRobotDataset
             from lerobot.policies.factory import make_pre_post_processors
-            from lerobot.policies.smolvla.configuration_smolvla import SmolVLAConfig
             from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
         except ImportError as exc:
             raise RuntimeError(
@@ -142,7 +142,7 @@ class SmolVLAInferenceRuntime:
                 )
             logger.info("Loading SmolVLA LoRA base model from %s", base_model)
             adapter_policy_config = (
-                SmolVLAConfig.from_pretrained(str(checkpoint))
+                PreTrainedConfig.from_pretrained(str(checkpoint))
                 if (checkpoint / "config.json").is_file()
                 else None
             )

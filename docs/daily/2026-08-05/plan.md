@@ -2,7 +2,7 @@
 
 ## 今日目标
 
-上午：完成 C0 基线判决（r5 vs r6），收口 ACT-C0。**下午起**：按 [`datasets.md` §2.1](../datasets.md) 启动 **C1-lite** 首轮采集——红+蓝同桌、仅 `up`，先采 **40 条**（`red→up` ×20 + `blue→up` ×20）。
+上午：完成 C0 基线判决（r5 vs r6），收口 ACT-C0。下午完成 C1-lite 首轮 40 条后，验证 ACT 是否能利用文字条件；现场结果显示 stock LeRobot ACT 未形成红蓝条件绑定，因此暂停继续加训 ACT，转向搭建 **SmolVLA LoRA 微调与推理 smoke 链路**。
 
 ## 完成标准
 
@@ -19,7 +19,10 @@
 - [x] 每条 metadata 正确：`source_object` + `destination=up`；
 - [x] `batch_check_episodes --require-success` 全 PASS；
 - [x] `summarize_episode_conditions` 确认 red/blue 各 20；
-- [x] export 至 `outputs/datasets/shape_pick_place_v1_c1`（新目录，勿覆盖 `c0`）；
+- [x] export 至 `outputs/datasets/shape_pick_place_v1_c1`（40 ep / 8451 frames；新目录，勿覆盖 `c0`）；
+- [x] 完成 `act_c1_rb_up_ft50k_from_r5` 50k 首轮训练与固定构型 rollout；
+- [x] 明确 ACT 条件通道结论：runtime 虽传入 `task`，但 stock LeRobot ACT 的模型输入不是 `task` / `task_index`；文字条件未进入 ACT 的有效网络输入；
+- [ ] 搭建 SmolVLA LoRA smoke：训练、加载、同帧红蓝 task A/B 推理与部署链路；
 - [ ] 收工更新 `log.md`（含摆放随机是否均衡的自检）。
 
 ## 任务清单
@@ -35,15 +38,31 @@
 
 ### P1：采完 40 条后（可明日）
 
-- [ ] 新目录开训 `act_c1_rb_up_*`（**勿** resume `act_c0_r5` 同 job）；
-- [ ] 首轮 rollout：主看**抓对颜色率**；
-- [ ] 按验收门决定是否 +20～40 条。
+- [ ] 确认训练机 `sharedautonomy-train` 已具备 SmolVLA / PEFT 依赖与基础模型缓存；
+- [ ] 以 `shape_pick_place_v1_c1`（40 ep / 8451 frames）先做 C1-only SmolVLA LoRA smoke，复用现有标准 `task_text`，不再为 ACT 做 one-hot 编码；
+- [ ] 新建 SmolVLA 输出目录，保存 effective config、checkpoint 与推理配置；不覆盖 `act_c0_r5_critical_b8x2` 或 `act_c1_rb_up_ft50k_from_r5`；
+- [ ] 搭建 VLA 专用离线推理 / HTTP smoke 路径；不用现有 ACT 服务参数直接冒充 SmolVLA 服务；
+- [ ] 用相同红蓝摆放分别输入 red / blue，验收 task 改变是否稳定改变 reach 目标；
+- [ ] 若颜色绑定成立但抓取精度不足，再评估加入 C0 数据混合；在此之前不继续盲目扩采 C1。
 
 ### 已取消 / 延期
 
 - [x] r5 短程微调 → 不做；
+- [x] 在现有 ACT-C1 50k 上继续加步或继续用同一设定补采 → 暂停；当前证据首先指向条件通道缺失，不是单纯 steps 不够；
+- [x] 继续为 stock ACT 采集“成对构型”以期待文字条件自动生效 → 延后到条件输入真正接入模型后；
+- [x] 直接切换 π₀ → 暂不做；先完成更轻量的 SmolVLA smoke；
 - [x] 今日开 SA 采集器 → 延到 C1 颜色大致可分；
 - [ ] 重算卡顿定量、固定格点 benchmark → 非阻塞。
+
+## ACT-C1 诊断结论（已确认）
+
+本轮 `act_c1_rb_up_ft50k_from_r5` 并非简单的“50k 还不够”。固定构型对照显示：
+
+- 红左蓝右：输入 red ×2 均朝右，输入 blue ×2 也均朝右；
+- 蓝左红右：输入 red / blue 共 4 次均到两块中间并偏蓝；
+- 同一构型下切换 red / blue 没有稳定改变输出。
+
+因此当前 ACT 学到的是视觉 / 运动先验与位置折中，没有学到“文字条件 → 目标颜色选择”。项目 runtime 会把 `task` 放入 batch，但 LeRobot ACT 的标准模型输入是图像、state 与可选 `observation.environment_state`；数据集里的 `task_index` 只是任务元数据，不会自动变成 ACT 条件 embedding。结论是：不再把继续增加 ACT steps 当作首要修复手段，改用原生支持语言条件的 SmolVLA 验证。
 
 ## 位置随机（40 条怎么摆）
 
@@ -85,14 +104,17 @@ python scripts/summarize_episode_conditions.py --run-glob "shape-pick-place-trai
 ## 开始前条件
 
 - [x] C0 基线已锁（r5-200k）；
-- [ ] 红、蓝两块齐全，拾取区可达；
+- [x] 红、蓝两块齐全，拾取区可达；
 - [ ] 真机运动双重许可；
-- [ ] 已读 [`datasets.md` §2.1 C1-lite](../datasets.md)。
+- [x] 已读 [`datasets.md` §2.1 C1-lite](../datasets.md)；
+- [ ] SmolVLA 基础模型、PEFT 依赖与训练机显存条件确认。
 
 ## 今天不做
 
 - 不在 r5/r6 目录 resume 当 C1 训练；
 - 不做 `down`、黄块、完整 6 条件；
+- 不继续 ACT-C1 加步或在未接入条件通道前扩大 C1 采集；
+- 不直接开 π₀ 训练；
 - 不做 SharedAutonomy 采集；
 - 不继续 ACT-C0 加步 / 补采。
 
@@ -100,12 +122,15 @@ python scripts/summarize_episode_conditions.py --run-glob "shape-pick-place-trai
 
 - [x] 下一阶段：C1 颜色基线优先于 SA；
 - [x] 首轮规模：**40 条**（20+20）；
-- [ ] 训完 40 条后：纯 C1 smoke 还是 C0+C1 混合 → **等首轮 rollout 再定**。
+- [x] 首轮 ACT-C1 rollout 已完成：文字条件未形成有效颜色选择；
+- [x] 下一步策略：先做 SmolVLA C1-only smoke，再决定是否加入 C0 混合；
+- [ ] SmolVLA 颜色条件成立后：确定 C0+C1 混合比例与正式 rollout 方案。
 
 ## 背景
 
 | 项目 | 状态 |
 | --- | --- |
 | C0 | r5-200k 基线；90 ep 单块 blue；已收口 |
-| C1-lite | 0/40；红蓝同桌，仅 up |
+| C1-lite | 40/40；红蓝同桌，仅 up；40 ep / 8451 frames；ACT-C1 50k 未形成颜色绑定 |
+| SmolVLA | 待搭建 LoRA 微调、加载、推理与 rollout smoke 链路 |
 | 配方 | [`datasets.md` §2.1](../datasets.md) |

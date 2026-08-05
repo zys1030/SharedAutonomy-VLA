@@ -57,7 +57,7 @@
 
 历史判决出处：[`daily/2026-07-31/log.md`](daily/2026-07-31/log.md)（+20 分层配方）、[`daily/2026-08-03/`](daily/2026-08-03/)、[`daily/2026-08-05/log.md`](daily/2026-08-05/log.md)（基线锁定）。
 
-#### C1-lite：红蓝同桌、只学颜色（首轮 40 ep 已完成，待 rollout）
+#### C1-lite：红蓝同桌、只学颜色（native 60 ep；已 export 40 ep，新增 20 条配对消歧待处理）
 
 **目标**：模型在**两色同时在场**时，按 `task_text` / `source_object` 抓对颜色并放到 `up`；暂不实现 SharedAutonomy；暂不做 `down`、不做黄块。
 
@@ -163,6 +163,7 @@ python scripts/batch_check_episodes.py --run-glob "shape-pick-place-train-*" --r
 | `train-141`…`150` | 10    | C0 blue→up **远侧目标定向补采** | **c0**    | 2026-08-04；新增后 C0 合计 **90 ep / 19518 frames**；用于下一轮远侧表现验证 |
 | `train-151`…`170` | 20    | C1 blue→up；红蓝同桌；目标蓝块，红块为干扰 | **c1**    | 2026-08-05；metadata 标注 `source_object=blue`、`destination=up` |
 | `train-171`…`190` | 20    | C1 red→up；红蓝同桌；目标红块，蓝块为干扰 | **c1**    | 2026-08-05；metadata 标注 `source_object=red`、`destination=up`；C1 首轮合计 **40 ep** |
+| `train-191`…`210` | 20    | C1 配对消歧：5 组固定布局，每组依次 `red→up`、`blue→up`、交换红蓝位置后再 `red→up`、`blue→up`；奇数 episode 抓红，偶数 episode 抓蓝 | 待 export | 2026-08-05；每组 4 条；新增后 native C1 合计 **60 ep**；metadata 应保持 `source_object` / `destination=up` |
 
 
 ---

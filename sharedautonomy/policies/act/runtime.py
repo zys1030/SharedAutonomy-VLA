@@ -173,26 +173,55 @@ def _hwc_uint8_to_chw_float(image_hwc: np.ndarray) -> np.ndarray:
 
 def resolve_dataset_frame_index(dataset: Any, *, episode_index: int, frame_index: int) -> int:
     """Map (episode_index, frame_index within episode) -> LeRobot global index."""
-    episode_data_index = getattr(dataset, "episode_data_index", None)
-    if episode_data_index is not None and "from" in episode_data_index and "to" in episode_data_index:
-        starts = episode_data_index["from"]
-        ends = episode_data_index["to"]
-        if episode_index < 0 or episode_index >= len(starts):
-            raise ValueError(f"episode_index={episode_index} out of range (n_episodes={len(starts)})")
-        start = int(starts[episode_index])
-        end = int(ends[episode_index])
-        length = end - start
-        if frame_index < 0 or frame_index >= length:
-            raise ValueError(
-                f"frame_index={frame_index} out of range for episode {episode_index} (len={length})"
-            )
-        return start + int(frame_index)
-
-    matches = [i for i in range(len(dataset)) if int(dataset[i]["episode_index"]) == int(episode_index)]
-    if not matches:
-        raise ValueError(f"episode_index={episode_index} not found in dataset")
-    if frame_index < 0 or frame_index >= len(matches):
+    bounds = _episode_bounds_from_data_index(dataset, episode_index)
+    if bounds is None:
+        bounds = _episode_bounds_from_meta_episodes(dataset, episode_index)
+    if bounds is None:
         raise ValueError(
-            f"frame_index={frame_index} out of range for episode {episode_index} (len={len(matches)})"
+            "Cannot resolve dataset frame index: dataset must expose "
+            "episode_data_index['from'/'to'] or meta.episodes "
+            "dataset_from_index/dataset_to_index"
         )
-    return matches[frame_index]
+    start, end = bounds
+    length = end - start
+    if frame_index < 0 or frame_index >= length:
+        raise ValueError(
+            f"frame_index={frame_index} out of range for episode {episode_index} (len={length})"
+        )
+    return start + int(frame_index)
+
+
+def _episode_bounds_from_data_index(dataset: Any, episode_index: int) -> tuple[int, int] | None:
+    episode_data_index = getattr(dataset, "episode_data_index", None)
+    if episode_data_index is None or "from" not in episode_data_index or "to" not in episode_data_index:
+        return None
+    starts = episode_data_index["from"]
+    ends = episode_data_index["to"]
+    if episode_index < 0 or episode_index >= len(starts):
+        raise ValueError(f"episode_index={episode_index} out of range (n_episodes={len(starts)})")
+    return int(starts[episode_index]), int(ends[episode_index])
+
+
+def _episode_bounds_from_meta_episodes(dataset: Any, episode_index: int) -> tuple[int, int] | None:
+    """LeRobot 0.6+ episode offsets from ``dataset.meta.episodes`` (O(1), no frame decode)."""
+    meta = getattr(getattr(dataset, "meta", None), "episodes", None)
+    if meta is None:
+        return None
+    try:
+        from_indices = meta["dataset_from_index"]
+        to_indices = meta["dataset_to_index"]
+    except (KeyError, TypeError):
+        return None
+
+    if hasattr(meta, "columns") and "episode_index" in meta.columns:
+        rows = meta.index[meta["episode_index"] == int(episode_index)].tolist()
+        if not rows:
+            raise ValueError(f"episode_index={episode_index} not found in dataset meta.episodes")
+        row = rows[0]
+        return int(from_indices[row]), int(to_indices[row])
+
+    if episode_index < 0 or episode_index >= len(from_indices):
+        raise ValueError(
+            f"episode_index={episode_index} out of range (n_episodes={len(from_indices)})"
+        )
+    return int(from_indices[episode_index]), int(to_indices[episode_index])

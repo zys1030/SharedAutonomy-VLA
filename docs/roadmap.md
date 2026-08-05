@@ -6,15 +6,14 @@
 
 ## 当前状态
 
-- 当前阶段：**Week 1.5 首轮闭环已闭合**；C0 / `act_c0_r3` 能闭合、偶发完整抓放，主瓶颈为 **水平对准偏差场（1–4cm，随位姿/yaw 变化）** → 下一步 **+20 分层抖动采集 → `act_c0_r4` → 格点厘米复测**；C1 / VLA 暂缓
-- 最近完成的每日计划：[2026-07-31 plan](daily/2026-07-31/plan.md)
-- 最近工作日志：[2026-07-31 log](daily/2026-07-31/log.md)
-- 下一步主线（2026-07-31 更新）：
-  1. **已完成**：Manual 60 / v003；C0 40 / `act_c0_r3`；`reset_every=25` 基线；水平偏差格点表 + 闭合 EE 散点；
-  2. **近期**：+20（14 clean 分层抖动 + 6 水平修正）→ `act_c0_r4` → 同格点表看偏差是否缩小；无效则停堆数据；
-  3. **C0 对准稳定后**：再进 C1 / `_v004`；Week 2 SA 采集器可并行；
-  4. **正式 SA 对照采集**不抢在 Manual/C0 闭环与 SA runner 稳定之前；
-  5. 现成 VLA LoRA 不当当前对准问题的捷径（可后续 smoke）。
+- 当前阶段：**ACT-C0 已收口**；下一步按用户选择先做 **C1-lite（红蓝同桌、只 up）颜色基线**，SharedAutonomy 工程暂缓到颜色大致可分之后。
+- 最近完成的每日计划：[2026-08-05 plan](daily/2026-08-05/plan.md)
+- 最近工作日志：[2026-08-05 log](daily/2026-08-05/log.md)
+- 下一步主线（2026-08-05 晚更新）：
+  1. **已完成**：Manual 60 / v003；C0 至 90 ep；ACT-C0 多轮；基线锁定 `act_c0_r5_critical_b8x2` **200k**；
+  2. **近期**：按 [`datasets.md` §2.1](datasets.md) 采 C1-lite（首轮 40：红/蓝各 20，两色同桌，仅 `up`）→ 新目录训 `act_c1_*`（**勿 resume r5 同 job**）→ 以「抓对颜色率」验收；
+  3. **C1 薄基线可用后**：再开 SharedAutonomy 最小对照；VLA LoRA 仍可并行 smoke；
+  4. **明确不做**：在 r5/r6 上覆盖续训当 C1；本阶段不做 down/黄/完整 6 条件；不为 C1 开超参网格。
 
 ## Week 1：硬件、数据与最小训练闭环
 
@@ -39,7 +38,7 @@
   - Linux 2×3090，`sharedautonomy-train`，dataset `shape_pick_place_v1_v001`（3 episodes / 1040 frames）；
   - `lerobot-train` ACT，100 steps，`batch_size=2`，~52M params；
   - checkpoint：`outputs/train/act_smoke_v001/checkpoints/{000100,last}`；
-  - VLA smoke **未做**（刻意排后）。
+  - VLA smoke **未做**（刻意排后；现可并行）。
 
 验收标准：
 
@@ -99,9 +98,10 @@ lerobot-train \
 
 训练机前置（已验证）：`conda install ffmpeg -c conda-forge`；若 torchcodec 报 `CXXABI_*` / OpenVINO，需 `LD_LIBRARY_PATH=$CONDA_PREFIX/lib`（可写入该 env 的 `etc/conda/activate.d`）。本地 dataset 勿依赖 Hub：`HF_HUB_OFFLINE=1`。
 
-## Week 1.5：Manual 扩量与 ACT-Manual 闭环（插入；原 Week 2/3 部分前移）
+## Week 1.5：Manual 扩量与 ACT-Manual / ACT-C0 闭环（插入；原 Week 2/3 部分前移）
 
 > 2026-07-28 调整：不要求「先做完 SharedAutonomy 再碰真训」。先用 Manual 闭合采集–训练–部署，并用 rollout 回答「要多少数据」。
+> 2026-08-05 收口：C0 单条件闭环已达可用基线；停止以堆 ACT 为主策略。
 
 - [x] Manual 继续扩量（在 12 条种子之上；按条件补条数，失败不硬计入）；
   - **60 条** train（3 色 × 2 区 × 10；`shape-pick-place-train-001`…`060`）；`summarize_episode_conditions` 均衡；`batch_check_episodes` 60/60 PASS（2026-07-28）；
@@ -110,17 +110,18 @@ lerobot-train \
   - `outputs/train/act_manual_v002`：先 3k 再 resume 至 **50k**；`batch_size=2`；单卡；~9–15 step/s；checkpoint `.../checkpoints/last/pretrained_model/`；
 - [x] 真机 rollout（小规模 held-out 位姿）；用失败模式决定下一波采集量；
   - 2026-07-29：`act_manual_v003`，9 次，**0/9 成功**；链路成立；主瓶颈为 6 条件绑定与 grasp，非 RTT；见 `docs/daily/2026-07-29/log.md`；
-- [ ] （并行，可稍后启动）Week 2 SharedAutonomy 采集器工程——见下节。
+- [x] **C0 课程闭环**（单块 `blue→up`）：扩至 **90 ep**；多轮 ACT（含关键帧加权）；锁定基线 **`act_c0_r5_critical_b8x2` 200k**（17/22；中部随机约 8/12）；r6 远侧实验不替换基线（2026-08-05）；
+- [ ] （并行，现为主线）Week 2 SharedAutonomy 采集器工程——见下节。
 
 验收标准（本插入阶段）：
 
 > 能在服务器稳定跑完非 smoke 的 ACT-Manual；至少做过一轮真机 rollout，并形成「还要多少 Manual 数据」的判断。
 
-（真训与 rollout 首轮回合已闭合；「还要多少数据」第一版判断：**60 条不足，需条件分辨导向扩量**。）
+（真训与 rollout 首轮闭环已闭合；C0 已给出「单条件可用基线」；多条件大规模扩量让位于 SA 对照。）
 
 ## Week 2：SharedAutonomy 采集器
 
-> 可与 ACT-Manual 训练 / 扩量**并行**（GPU vs 本机工程）。正式 SA 大批量对照采集仍等本周验收通过后再开。
+> **当前主线（2026-08-05）**。可与可选 VLA smoke 并行。正式 SA 大批量对照采集仍等本周最小验收通过后再开。
 
 - [ ] 目标检测和工作空间标定；
 - [ ] 候选目标意图推理；
@@ -137,9 +138,9 @@ lerobot-train \
 
 ## Week 3：正式数据与 ACT
 
-> ACT-Manual 的**第一版真训与 rollout**已前移到 Week 1.5；本周侧重同分布对照集与 ACT-SA，以及更完整的 Manual 正式集。
+> ACT-Manual / ACT-C0 的第一版真训与 rollout 已前移到 Week 1.5；本周侧重同分布对照集与 ACT-SA，以及更完整的 Manual 正式集。
 
-- [ ] Manual 数据集（对照实验规模；可继承 1.5 扩量成果）；
+- [ ] Manual 数据集（对照实验规模；可继承 1.5 / C0 成果作一侧基线）；
 - [ ] SharedAutonomy 数据集；
 - [ ] 数据清洗和质量统计；
 - [ ] ACT-Manual（完整版 / 与 SA 可比设置）；
@@ -147,6 +148,8 @@ lerobot-train \
 - [ ] 真机 rollout 与第一版对照结果。
 
 ## Week 4：小型 VLA
+
+> 可与 Week 2 **并行启动 smoke**；不挡 SharedAutonomy 主线。
 
 - [ ] 语言任务字段；
 - [ ] VLA LoRA smoke test；

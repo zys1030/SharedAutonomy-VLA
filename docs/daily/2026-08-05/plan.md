@@ -2,7 +2,7 @@
 
 ## 今日目标
 
-上午：完成 C0 基线判决（r5 vs r6），收口 ACT-C0。下午完成 C1-lite 首轮 40 条后，验证 ACT 是否能利用文字条件；现场结果显示 stock LeRobot ACT 未形成红蓝条件绑定，因此暂停继续加训 ACT，转向搭建 **SmolVLA LoRA 微调与推理 smoke 链路**。
+上午：完成 C0 基线判决（r5 vs r6），收口 ACT-C0。下午：C1-lite 40 条 + ACT-C1 诊断。晚间：搭建并完成 **SmolVLA LoRA 微调与部署 smoke**；启动过夜 C0 / C0+C1 串行训练。
 
 ## 完成标准
 
@@ -22,8 +22,8 @@
 - [x] export 至 `outputs/datasets/shape_pick_place_v1_c1`（40 ep / 8451 frames；新目录，勿覆盖 `c0`）；
 - [x] 完成 `act_c1_rb_up_ft50k_from_r5` 50k 首轮训练与固定构型 rollout；
 - [x] 明确 ACT 条件通道结论：runtime 虽传入 `task`，但 stock LeRobot ACT 的模型输入不是 `task` / `task_index`；文字条件未进入 ACT 的有效网络输入；
-- [ ] 搭建 SmolVLA LoRA smoke：训练、加载、同帧红蓝 task A/B 推理与部署链路；
-- [ ] 收工更新 `log.md`（含摆放随机是否均衡的自检）。
+- [x] 搭建 SmolVLA LoRA smoke：训练、加载、同帧红蓝 task A/B 推理与部署链路；
+- [x] 收工更新 `log.md`（含 SmolVLA 晚间进展与过夜训练状态）。
 
 ## 任务清单
 
@@ -38,12 +38,12 @@
 
 ### P1：采完 40 条后（可明日）
 
-- [ ] 确认训练机 `sharedautonomy-train` 已具备 SmolVLA / PEFT 依赖与基础模型缓存；
-- [ ] 以 `shape_pick_place_v1_c1`（40 ep / 8451 frames）先做 C1-only SmolVLA LoRA smoke，复用现有标准 `task_text`，不再为 ACT 做 one-hot 编码；
-- [ ] 新建 SmolVLA 输出目录，保存 effective config、checkpoint 与推理配置；不覆盖 `act_c0_r5_critical_b8x2` 或 `act_c1_rb_up_ft50k_from_r5`；
-- [ ] 搭建 VLA 专用离线推理 / HTTP smoke 路径；不用现有 ACT 服务参数直接冒充 SmolVLA 服务；
-- [ ] 用相同红蓝摆放分别输入 red / blue，验收 task 改变是否稳定改变 reach 目标；
-- [ ] 若颜色绑定成立但抓取精度不足，再评估加入 C0 数据混合；在此之前不继续盲目扩采 C1。
+- [x] 确认训练机 `sharedautonomy-train` 已具备 SmolVLA / PEFT 依赖与基础模型缓存；
+- [x] 以 `shape_pick_place_v1_c1`（40 ep / 8451 frames）先做 C1-only SmolVLA LoRA smoke，复用现有标准 `task_text`，不再为 ACT 做 one-hot 编码；
+- [x] 新建 SmolVLA 输出目录，保存 effective config、checkpoint 与推理配置；不覆盖 `act_c0_r5_critical_b8x2` 或 `act_c1_rb_up_ft50k_from_r5`；
+- [x] 搭建 VLA 专用离线推理 / HTTP smoke 路径；不用现有 ACT 服务参数直接冒充 SmolVLA 服务；
+- [x] 用相同红蓝摆放分别输入 red / blue，验收 task 改变是否稳定改变 reach 目标（粗趋势有，未达验收门）；
+- [x] 评估加入 C0 数据混合：本机 export `c0_c1`（150 ep）；过夜启动 C0-only + C0+C1 串行 50k（后者中断，8-06 续）。
 
 ### 已取消 / 延期
 
@@ -107,7 +107,7 @@ python scripts/summarize_episode_conditions.py --run-glob "shape-pick-place-trai
 - [x] 红、蓝两块齐全，拾取区可达；
 - [ ] 真机运动双重许可；
 - [x] 已读 [`datasets.md` §2.1 C1-lite](../datasets.md)；
-- [ ] SmolVLA 基础模型、PEFT 依赖与训练机显存条件确认。
+- [x] SmolVLA 基础模型、PEFT 依赖与训练机显存条件确认（双卡 b8×2 FP16 可用）。
 
 ## 今天不做
 
@@ -124,13 +124,14 @@ python scripts/summarize_episode_conditions.py --run-glob "shape-pick-place-trai
 - [x] 首轮规模：**40 条**（20+20）；
 - [x] 首轮 ACT-C1 rollout 已完成：文字条件未形成有效颜色选择；
 - [x] 下一步策略：先做 SmolVLA C1-only smoke，再决定是否加入 C0 混合；
-- [ ] SmolVLA 颜色条件成立后：确定 C0+C1 混合比例与正式 rollout 方案。
+- [x] 已启动 C0-only + C0+C1 混合 LoRA 过夜训练（C0+C1 未完成，见 log）；
+- [ ] SmolVLA 颜色条件正式验收门：固定构型稳定分色 + 抓放可用（8-06 起）。
 
 ## 背景
 
 | 项目 | 状态 |
 | --- | --- |
-| C0 | r5-200k 基线；90 ep 单块 blue；已收口 |
-| C1-lite | 40/40；红蓝同桌，仅 up；40 ep / 8451 frames；ACT-C1 50k 未形成颜色绑定 |
-| SmolVLA | 待搭建 LoRA 微调、加载、推理与 rollout smoke 链路 |
+| C0 | r5-200k ACT 基线；90 ep 单块 blue；已收口 |
+| C1-lite | 60 ep native；`c1` 40 ep + `c0_c1` 150 ep 合并快照 |
+| SmolVLA | C1 50k 训完 + 部署链路通；C0 50k 训完待 rollout；C0+C1 50k 中断 |
 | 配方 | [`datasets.md` §2.1](../datasets.md) |

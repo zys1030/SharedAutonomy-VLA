@@ -1,19 +1,20 @@
 # 项目路线图
 
-本文档维护 SharedAutonomy-VLA 的阶段目标、当前进度和验收标准。项目背景见 [`overview.md`](overview.md)；具体的每日执行项与工作记录分别保存在 [`daily/`](daily/) 下的 `plan.md` 和 `log.md` 中。
+本文档维护 SharedAutonomy-VLA 的阶段目标、当前进度和验收标准。项目背景与**范式定位**见 [`overview.md`](overview.md)（§1.2）；具体的每日执行项与工作记录分别保存在 [`daily/`](daily/) 下的 `plan.md` 和 `log.md` 中。
 
 **使用说明**：周次标题是规划骨架，不是不可改的排期圣旨。若现场节奏或证据显示更好顺序（例如先闭合 Manual 采集–训练–部署，再并行 SharedAutonomy 工程），应更新本文「当前状态」与相关周次说明，并在当日 `log.md` 记下决策；`overview.md` 的研究问题与交付优先级仍优先遵守。
 
 ## 当前状态
 
-- 当前阶段：**ACT-C0 已收口**；下一步按用户选择先做 **C1-lite（红蓝同桌、只 up）颜色基线**，SharedAutonomy 工程暂缓到颜色大致可分之后。
+- 当前阶段：**SmolVLA LoRA 管线已打通**（C1 50k 训完 + 部署 smoke）；ACT-C0 基线仍锁 **r5-200k**。8-06 主线：**C0 SmolVLA rollout** + **C0+C1 混合 LoRA 重训**。
 - 最近完成的每日计划：[2026-08-05 plan](daily/2026-08-05/plan.md)
 - 最近工作日志：[2026-08-05 log](daily/2026-08-05/log.md)
-- 下一步主线（2026-08-05 晚更新）：
-  1. **已完成**：Manual 60 / v003；C0 至 90 ep；ACT-C0 多轮；基线锁定 `act_c0_r5_critical_b8x2` **200k**；
-  2. **近期**：按 [`datasets.md` §2.1](datasets.md) 采 C1-lite（首轮 40：红/蓝各 20，两色同桌，仅 `up`）→ 新目录训 `act_c1_*`（**勿 resume r5 同 job**）→ 以「抓对颜色率」验收；
-  3. **C1 薄基线可用后**：再开 SharedAutonomy 最小对照；VLA LoRA 仍可并行 smoke；
-  4. **明确不做**：在 r5/r6 上覆盖续训当 C1；本阶段不做 down/黄/完整 6 条件；不为 C1 开超参网格。
+- 下一步主线（2026-08-06）：
+  1. **已完成**：Manual 60 / v003；C0 90 ep；ACT-C0 基线 r5-200k；C1 40+20 ep；ACT-C1 分色失败诊断；
+  2. **已完成（smoke）**：SmolVLA LoRA 训练 + `serve_smolvla_policy` / rollout 链路；C1 粗分色 rollout；
+  3. **进行中**：`smolvla_c0_90ep_lora_50k_b8x2` rollout；`smolvla_c0_c1_lora_50k_b8x2` 50k 重训（前次 SIGHUP 中断）；
+  4. **仍延后**：SharedAutonomy 最小对照，至 SmolVLA 红蓝验收门大致通过；
+  5. **明确不做**：stock ACT 上硬接 one-hot 追 C1；在 r5/r6 目录 resume 当 C1。
 
 ## Week 1：硬件、数据与最小训练闭环
 
@@ -111,7 +112,8 @@ lerobot-train \
 - [x] 真机 rollout（小规模 held-out 位姿）；用失败模式决定下一波采集量；
   - 2026-07-29：`act_manual_v003`，9 次，**0/9 成功**；链路成立；主瓶颈为 6 条件绑定与 grasp，非 RTT；见 `docs/daily/2026-07-29/log.md`；
 - [x] **C0 课程闭环**（单块 `blue→up`）：扩至 **90 ep**；多轮 ACT（含关键帧加权）；锁定基线 **`act_c0_r5_critical_b8x2` 200k**（17/22；中部随机约 8/12）；r6 远侧实验不替换基线（2026-08-05）；
-- [ ] （并行，现为主线）Week 2 SharedAutonomy 采集器工程——见下节。
+- [x] **C1-lite 首轮**（40 ep + ACT-C1 50k rollout）：确认 stock ACT **不**消费 `task`；改 SmolVLA 路线（2026-08-05）；
+- [ ] （并行，现为主线）Week 2 SharedAutonomy 采集器工程——见下节（**延后至 SmolVLA 颜色门**）。
 
 验收标准（本插入阶段）：
 
@@ -121,7 +123,7 @@ lerobot-train \
 
 ## Week 2：SharedAutonomy 采集器
 
-> **当前主线（2026-08-05）**。可与可选 VLA smoke 并行。正式 SA 大批量对照采集仍等本周最小验收通过后再开。
+> **当前主线（2026-08-06）**：SmolVLA C0 rollout + C0+C1 混合重训。正式 SA 大批量对照仍等 SmolVLA 红蓝验收门。
 
 - [ ] 目标检测和工作空间标定；
 - [ ] 候选目标意图推理；
@@ -149,13 +151,13 @@ lerobot-train \
 
 ## Week 4：小型 VLA
 
-> 可与 Week 2 **并行启动 smoke**；不挡 SharedAutonomy 主线。
+> 2026-08-05 晚：**LoRA smoke 已打通**（训练 + 部署 + 初步 rollout）。与 Week 2 并行推进；SA 仍延后。
 
-- [ ] 语言任务字段；
-- [ ] VLA LoRA smoke test；
-- [ ] VLA-Manual；
+- [x] 语言任务字段（数据集 `task` / `task_text`；SmolVLA 经 VLM 消费）；
+- [x] VLA LoRA smoke test（`smolvla_c1_rb_up_lora_50k_b8x2` + serve/rollout 脚本）；
+- [ ] VLA-Manual（C0 单块抓放达可用门）；
 - [ ] VLA-SharedAutonomy；
-- [ ] 真机推理；
+- [x] 真机推理（smoke：`serve_smolvla_policy` + `rollout_smolvla_policy`；正式验收未完成）；
 - [ ] 初步泛化测试；
 - [ ] 发布可展示的 GitHub MVP。
 

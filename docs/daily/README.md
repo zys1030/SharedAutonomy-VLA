@@ -62,4 +62,5 @@ docs/daily/YYYY-MM-DD/
 | 2026-07-31 | [plan](2026-07-31/plan.md) | [log](2026-07-31/log.md) | 已完成（act_c0_r3 复测：能闭合；水平偏差场定性；reset=25；+20 采集配方；下午出差提前收工） |
 | 2026-08-03 | [plan](2026-08-03/plan.md) | [log](2026-08-03/log.md) | 已完成（C0 80 ep；关键帧加权；`r4`/`r4_critical` rollout；`r5` 训练启动） |
 | 2026-08-04 | [plan](2026-08-04/plan.md) | [log](2026-08-04/log.md) | 已完成（`r5` 200k；多 checkpoint rollout 17/22；C0 90 ep；启动 `r6`） |
-| 2026-08-05 | [plan](2026-08-05/plan.md) | [log](2026-08-05/log.md) | 已完成（`r6` 多 ckpt 诊断；中部随机对照；锁定 r5-200k；主线改 SA） |
+| 2026-08-05 | [plan](2026-08-05/plan.md) | [log](2026-08-05/log.md) | 已完成（r5 基线；C1+SmolVLA LoRA 部署；过夜 C0 训完、C0+C1 中断） |
+| 2026-08-06 | [plan](2026-08-06/plan.md) | [log](2026-08-06/log.md) | 进行中（C0 50k 定性；C0+C1 ~9k/50k） |

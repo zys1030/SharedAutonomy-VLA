@@ -6,17 +6,18 @@
 
 ## 收工摘要
 
-`act_c0_r6_critical_b8x2`（90 ep，远侧补采后从头训）完成高步数真机诊断。远侧相对 r5 有改善，但中部随机位置/朝向测试中 **r5-200k（8/12）明显稳于 r6-300k（7/12）与 r6-400k（2/6）**。400k 相对 370k 无明显增益。
+**上午**：`act_c0_r6_critical_b8x2` 多 checkpoint 真机诊断；中部随机 **r5-200k（8/12）明显稳于 r6-300k（7/12）与 r6-400k（2/6）**。**锁定 `act_c0_r5_critical_b8x2` 200k 为 ACT-C0 基线**；r6 保留为远侧实验。
 
-**C0 判决：锁定 `act_c0_r5_critical_b8x2` 200k 为部署与后续对照基线**；r6 保留为远侧实验，不替换基线。ACT-C0 主线收口，下一阶段优先 SharedAutonomy 对照，而不是继续堆步数或大规模多条件采集。
+**下午–晚间**：完成 C1-lite 40 条采集与 `act_c1_rb_up_ft50k_from_r5` rollout——**stock ACT 未形成红蓝文字条件绑定**。转向 **SmolVLA LoRA**：训练机环境（PEFT / 本地 `smolvla_base`）、C1-only 50k 双卡训练（`smolvla_c1_rb_up_lora_50k_b8x2`）、**推理/部署链路**（`serve_smolvla_policy`、`rollout_smolvla_policy` 等）与初步真机 rollout（有粗粒度分色趋势；当日记「抓取/闭合弱」→ **8-06 更正：闭合缺 `--enable-gripper`**，分色/对准不足仍成立）。本机合并 **C0+C1** 快照 `c0_c1`（**150 ep / 32193**）；过夜串行训 **C0 LoRA 50k 已完成**，**C0+C1 LoRA 在 ~3587 step 因 SIGHUP 中断**（8-06 `tmux` 重训）。
 
 | 维度 | 结果 |
 | --- | --- |
-| r6 370k | 长边+短边诊断约 10/17 试次；远点部分改善、近侧方差大 |
-| r6 200k / 300k / 400k 长边 | 1/6、3/7、5/9 |
-| 中部随机 | r5 **8/12**；r6-300k **7/12**；r6-400k **2/6**（提前停） |
-| C0 基线 | **r5-200k** |
-| 下一主线 | SharedAutonomy 对照；VLA LoRA 可并行 smoke |
+| ACT-C0 基线 | **r5-200k**（中部随机 8/12） |
+| ACT-C1 | 50k + 固定构型 rollout：**无稳定分色**（task 未进 ACT 网络） |
+| SmolVLA C1 50k | 训练完成；rollout 有朝目标色 reach 趋势；当日记「未闭合」→ **8-06 更正**：缺 `--enable-gripper`，模型已有闭爪意图、硬件未下发 |
+| SmolVLA 部署 | server + dataset smoke + 真机 rollout 链路已通 |
+| 过夜训练 | `smolvla_c0_90ep_lora_50k_b8x2` 完成；`smolvla_c0_c1_lora_50k_b8x2` **中断** |
+| 8-06 主线 | C0 SmolVLA rollout；C0+C1 50k 重训 |
 
 ## 完成情况
 
@@ -30,6 +31,18 @@
 - [x] 观察到 r6 400k 中部的稳定失败模式后停止继续测该 checkpoint；
 - [x] 决定主力 checkpoint：**r5-200k**（中部更稳）；r6 不替换；
 - [x] 与 r5 的中部随机对照已完成（非严格配对格点，但是同协议诊断）。
+- [x] C1-lite 40 条采集、check、export（`shape_pick_place_v1_c1`）；
+- [x] `act_c1_rb_up_ft50k_from_r5` 50k 训练与红蓝固定构型 rollout；
+- [x] 确认 stock LeRobot ACT **不消费** `task` 字符串作条件输入；
+- [x] 训练机安装 SmolVLA / PEFT；本地 `smolvla_base` + VLM 离线路径修补；
+- [x] `smolvla_c1_rb_up_lora_50k_b8x2`：双卡 batch 8×2、FP16、LoRA r=64、50k 训完；
+- [x] 实现 SmolVLA runtime / serve / rollout / dataset smoke（`sharedautonomy/policies/smolvla/`、`scripts/serve_smolvla_policy.py` 等）；
+- [x] C1 SmolVLA 初步真机 rollout（粗分色趋势；当日观感「不闭合」——**8-06 更正为部署门控**，见下）；
+- [x] 本机 C1 扩至 60 ep（`train-191`…`210` 配对消歧）并 export 进 `shape_pick_place_v1_c0_c1`（150 / 32193）；
+- [x] 过夜启动 `smolvla_c0_90ep_lora_50k_b8x2` + `smolvla_c0_c1_lora_50k_b8x2` 串行 50k；
+- [ ] C0+C1 混合 LoRA 50k **未完成**（JOB2 在 3587/50000 被 SIGHUP 打断；8-06 重训）；
+- [ ] C0 SmolVLA rollout（JOB1 训完，待 8-06 测）；
+- [ ] 收工 `log.md` 晚间段落 → 本更新补齐。
 
 ## 实验与结果
 
@@ -46,6 +59,10 @@
 | 中部随机位置/朝向：r5 200k | **8/12** | 中部重复测试表现最好，4 次失败分别为掉落或偏近碰到未夹起 |
 | 中部随机位置/朝向：r6 300k | **7/12** | 有稳定抓取，但偏近/偏远 5–8 mm、夹飞和抓起后滑落仍较多 |
 | 中部随机位置/朝向：r6 400k | **2/6** | 多次出现偏远 4–7 mm 后滑落/碰到未夹起，失败模式较稳定，因此提前停止 |
+| `act_c1_rb_up_ft50k_from_r5` | 红左蓝右：改 red/blue task 输出不变；蓝左红右：均去中间偏蓝 | **无稳定文字条件绑定**；与 v003 类「平均策略」一致 |
+| `smolvla_c1_rb_up_lora_50k_b8x2` 50k | loss ~0.03 平台；真机：红左偏左、红右偏右等粗趋势；当日记 **零次夹爪闭合** | 语言条件通道有效；对准仍弱。**闭合结论已更正（8-06）**：当日 rollout **未加** `--enable-gripper`，client 用 `_NoOpGripper`；日志若有 `action` 末维已低、`gripper_commanded=false` 即属此因。开夹爪复测后真机可闭爪；分色仍偏红强蓝弱（见 8-06 log） |
+| 过夜 `smolvla_c0_90ep_lora_50k_b8x2` | JOB1 在 JOB2 前启动（日志 03:54 前完成） | C0-only LoRA 50k **假定已完成**；待 8-06 rollout 验证 |
+| 过夜 `smolvla_c0_c1_lora_50k_b8x2` | 3587/50000（~7%）后 `SignalException: signal 1`（SIGHUP） | 非训练错误；会话/进程管理问题；无 5k checkpoint，需新目录重训 |
 
 ### 统计口径
 
@@ -186,6 +203,10 @@
 - **当前最合理的工作假设是“r6 用远侧收益换取了中部稳定性”**，但由于三组随机测试序列不完全相同，仍需保留不确定性。
 - **C0 收口决策（2026-08-05）**：锁定 **`act_c0_r5_critical_b8x2` 200k** 为 C0 基线；停止以继续加步或大规模补数为 C0 主策略；r6 仅作远侧实验归档。
 - **下一阶段主线**：SharedAutonomy 对照工程（意图/趋近/authority + Manual vs SA 对照）；VLA LoRA 可并行 smoke；RL 暂缓。
+- **ACT 与 SmolVLA 的分工（2026-08-05 晚）**：C1 颜色绑定用 **SmolVLA**（`task` 进 VLM）；ACT 保留为 C0 单块抓放基线（r5-200k），不在 stock ACT 上硬接 one-hot。
+- **SmolVLA LoRA 新建 vs 加载**：从 `smolvla_base` 训新 adapter 用 `policy.use_peft=false` + `peft.method_type=LORA`；`use_peft=true` 仅用于加载已有 adapter 目录。
+- **C1-only SmolVLA 初轮现象**：粗 reach 分色可见；当日「夹爪几乎不闭合」**事后更正（2026-08-06）**：根因是 rollout **未启用** `--enable-gripper`，不是策略未学到闭爪。分色/对准不足的判断仍成立 → 仍优先 C0-only 与 C0+C1 混合，而非单纯加 C1 步数。
+- **过夜训练中断**：`accelerate` 子进程收 SIGHUP → 应用 `tmux` / 加固 `nohup` 跑长训。
 
 ## 今日理解重点（15–30 分钟）
 
@@ -217,9 +238,25 @@
 
 - **一句话**：当边际收益变成空间权衡（远侧↑、中部↓）且主力场景已可用时，应锁基线并换主线，而不是继续加步。
 - **为什么重要**：求职闭环要展示「诊断→决策→下一系统能力」，不是无限抠单条件成功率。
-- **本项目怎么做**：中部随机 r5 优于 r6 → 锁 r5-200k；主线改 SharedAutonomy。
+- **本项目怎么做**：中部随机 r5 优于 r6 → 锁 r5-200k；C1 颜色改 SmolVLA 线。
 - **代码入口**：[`docs/roadmap.md`](../roadmap.md)、[`docs/datasets.md`](../datasets.md) §5。
 - **自测问题**：为什么远侧补采训到 400k 后仍选择 r5-200k 作基线？
+
+### 5. Stock ACT 与 SmolVLA 的条件输入
+
+- **一句话**：LeRobot 数据集里的 `task` / `task_index` 不等于 ACT 模型内的条件 embedding；SmolVLA 通过 VLM 消费自然语言。
+- **为什么重要**：C1 在 ACT 上 50k 仍随机抓色，根因是架构而非单纯步数不够。
+- **本项目怎么做**：C1 颜色验证改 `lerobot-train` + `serve_smolvla_policy`；ACT 仅作 C0 运动基线。
+- **代码入口**：`sharedautonomy/policies/act/runtime.py`、`sharedautonomy/policies/smolvla/runtime.py`。
+- **自测问题**：为何 runtime 把 `task` 放进 batch，ACT rollout 仍对 red/blue 无差？
+
+### 6. SmolVLA LoRA 从零微调时的 PEFT 开关
+
+- **一句话**：`policy.use_peft=false` + `peft.method_type=LORA` 表示在 base 上**新建** adapter；`use_peft=true` 表示**加载**已有 adapter。
+- **为什么重要**：误设 `use_peft=true` 且 `pretrained_path=smolvla_base` 会因缺 `adapter_config.json` 直接失败。
+- **本项目怎么做**：训练机离线需同时修补 `vlm_model_name` 与 preprocessor 内 tokenizer 路径。
+- **代码入口**：训练 transcript / `lerobot-train` CLI；`scripts/serve_smolvla_policy.py`。
+- **自测问题**：日志里 “Using PEFT! Wrapping model” 与 `use_peft=false` 矛盾吗？
 
 ### 面试式自测
 
@@ -227,38 +264,39 @@
 2. 为什么右近需要单独记录 3 次结果？
 3. 本轮为什么不能直接把不同 checkpoint 的成功次数合并比较？
 4. 为什么项目名是 SharedAutonomy，却先花一周做 ACT-C0？
+5. ACT-C1 固定构型下改 task 无输出差，说明什么？
 
 ## 代码与文档变更
 
 - 更新：[`docs/daily/2026-08-05/log.md`](log.md)、[`plan.md`](plan.md)；收口 [`../2026-08-04/`](../2026-08-04/)；
-- 更新：[`docs/roadmap.md`](../roadmap.md) 当前状态与下一步主线；
-- 更新：[`docs/datasets.md`](../datasets.md) r6 训练行与 C0 基线结论；
-- 本轮未修改训练代码、数据或模型配置。
+- 更新：[`docs/roadmap.md`](../roadmap.md)、[`docs/datasets.md`](../datasets.md)（C1 60 ep、`c0_c1`、SmolVLA 训练行）；
+- **新增**：`sharedautonomy/policies/smolvla/runtime.py`；`scripts/serve_smolvla_policy.py`、`rollout_smolvla_policy.py`、`dry_run_smolvla_observe_infer.py`、`smolvla_dataset_smoke.py`；`tests/test_smolvla_runtime.py`；
+- 训练机：`smolvla_c1_rb_up_lora_50k_b8x2`；过夜 `smolvla_c0_90ep_lora_50k_b8x2`、`smolvla_c0_c1_lora_50k_b8x2`（后者中断）。
 
 ## 验证
 
-- 真机：`act_c0_r6_critical_b8x2` 完成 370k、200k、300k、400k 诊断；中部随机 r5/r6 对照；
-- 结果：中部随机 r5 8/12 > r6-300k 7/12 > r6-400k 2/6；
-- 自动测试：未运行，本轮为真机 rollout 与文档收口；
-- 未验证：严格配对随机测试、重算卡顿定量、SA 对照、VLA smoke。
+- 真机：`act_c0_r6` 多 ckpt；`act_c1` 固定构型；SmolVLA C1 初步 rollout；
+- `pytest -m core`：SmolVLA runtime 单测通过（晚间合入时）；
+- 未验证：C0 SmolVLA rollout；C0+C1 混合 LoRA 训满 50k；SmolVLA 红蓝正式验收门。
 
 ## 未完成与阻塞
 
-- SharedAutonomy 采集器 / 对照实验尚未启动（下一主线）；
-- 重算卡顿定量测量未做；
-- 固定格点正式 benchmark 未做（非阻塞）。
+- `smolvla_c0_c1_lora_50k_b8x2` 过夜 JOB2 中断（SIGHUP），需 8-06 在 `tmux` 内重训；
+- C0 SmolVLA 50k rollout 待 8-06；
+- SharedAutonomy 采集器仍延后至 C1 颜色大致可分；
+- 重算卡顿定量、固定格点 benchmark → 非阻塞。
 
 ## 已沉淀到长期文档
 
-- C0 基线与 r6 结论 → [`docs/datasets.md`](../datasets.md)、[`docs/roadmap.md`](../roadmap.md)；
+- C0 ACT 基线、C1/SmolVLA 状态 → [`docs/datasets.md`](../datasets.md)、[`docs/roadmap.md`](../roadmap.md)；
 - 详细 rollout 保留在本 log。
 
 ## 下一工作日建议
 
-1. **启动 SharedAutonomy 最小对照**：在现有 safety/Cartesian 基础上接入意图或局部趋近 + authority，先跑通 Manual vs SA 的 reaching/抓放对照设计；
-2. 文档化 C0 基线：`r5-200k` + 中部随机 ≈8/12 + 已知失败模式（偏近碰到、偶发掉落）；
-3. （并行，可选）VLA LoRA smoke：用现有 C0 数据打通训练–加载–几次 rollout，不追求超过 ACT；
-4. 不继续 ACT 加步/大规模补数；r5 短程微调仅在 SA 空窗且有明确中部指标时限时尝试。
+1. **`smolvla_c0_90ep_lora_50k_b8x2` 真机 rollout**（单块 blue；查 30k/40k/50k 是否闭合、对准）；
+2. **`smolvla_c0_c1_lora_50k_b8x2` 重训 50k**（`tmux`；新目录或清目录后重跑；dataset `c0_c1`）；
+3. C0+C1 训完后红蓝同桌 rollout（主指标：抓对颜色率）；
+4. 不继续 ACT-C1 加步；SA 仍等 SmolVLA 颜色门。
 
 ## 自测参考答案
 
@@ -289,3 +327,15 @@
 
 4. **为什么先做 ACT-C0 再做 SharedAutonomy？**
    - 参考答案：先闭合 Manual 采集–训练–部署，才能证明数据与推理链路可用，并为 SA 对照提供可复现的 Manual 基线；否则无法区分「SA 有用」与「链路本身不通」。
+
+5. **ACT-C1 固定构型下改 task 无输出差，说明什么？**
+   - 参考答案：stock ACT 未把 `task` 编码进策略网络；行为由视觉布局与 C0 热启先验主导，不能靠加步解决分色。
+
+6. **SmolVLA “Using PEFT” 与 `use_peft=false` 矛盾吗？**
+   - 参考答案：不矛盾。`use_peft=false` 表示不从 checkpoint 加载已有 adapter；`peft.method_type=LORA` 仍会在训练开始时用 PEFT **包裹**模型并新建可训练 adapter。
+
+7. **理解重点 §5 — runtime 传入 task 但 ACT 无差？**
+   - 参考答案：batch 里的 `task` 对 ACT 多为元数据；模型 forward 主要用图像 + state，不含语言 embedding。
+
+8. **理解重点 §6 — 新建 LoRA 为何 `use_peft=false`？**
+   - 参考答案：`use_peft=true` 语义是加载已有 PEFT 权重；base 目录无 adapter 文件会报错。新建训练用 false + `peft.method_type=LORA`。

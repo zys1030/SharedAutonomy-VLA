@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 from sharedautonomy.data.critical_frames import (
@@ -14,8 +16,33 @@ from sharedautonomy.data.critical_frames import (
     load_critical_frame_index,
     save_critical_frame_index,
 )
+from sharedautonomy.data.critical_train import parse_critical_argument
 
 pytestmark = pytest.mark.core
+
+
+def test_parse_critical_argument_keeps_lerobot_argv() -> None:
+    index_path, remaining = parse_critical_argument(
+        [
+            "--critical-index",
+            "outputs/critical.json",
+            "--policy.type=smolvla",
+            "--batch_size=8",
+            "--steps=25000",
+        ]
+    )
+
+    assert index_path == Path("outputs/critical.json")
+    assert remaining == [
+        "--policy.type=smolvla",
+        "--batch_size=8",
+        "--steps=25000",
+    ]
+
+
+def test_parse_critical_argument_requires_index() -> None:
+    with pytest.raises(SystemExit):
+        parse_critical_argument(["--policy.type=smolvla"])
 
 
 def _action(gripper_open_fraction: float) -> np.ndarray:

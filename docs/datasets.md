@@ -57,7 +57,7 @@
 
 历史判决出处：[`daily/2026-07-31/log.md`](daily/2026-07-31/log.md)（+20 分层配方）、[`daily/2026-08-03/`](daily/2026-08-03/)、[`daily/2026-08-05/log.md`](daily/2026-08-05/log.md)（基线锁定）。
 
-#### C1-lite：红蓝同桌、只学颜色（native 60 ep；已 export 40 ep，新增 20 条配对消歧待处理）
+#### C1-lite：红蓝同桌、只学颜色（native **60 ep**；`c1` 40 ep + 配对消歧 20 ep；合并快照见 `c0_c1`）
 
 **目标**：模型在**两色同时在场**时，按 `task_text` / `source_object` 抓对颜色并放到 `up`；暂不实现 SharedAutonomy；暂不做 `down`、不做黄块。
 
@@ -124,7 +124,8 @@
 | `shape_pick_place_v1_v002` | `train-001`…`012` | 12 / 2800   | 黄/红/蓝 × up/down × 2   | Phase 3 种子；三块在场；`phase: train` | `act_manual_v002`（50k）          | 首轮真训标定；勿覆盖                     |
 | `shape_pick_place_v1_v003` | `train-001`…`060` | 60 / 12886  | 6 组合 × 10             | Phase 3 扩量；含 v002 的 12 条       | `act_manual_v003`（150k）         | 真机 rollout 0/9；**保留**供后续 C3 混合 |
 | `shape_pick_place_v1_c0`   | `train-061`…`150` | **90 / 19518** | blue→up × 90 | **C0**：单块、无干扰；`destination=up`；构成见 §4（44 直接抓 + 16 纠偏段 + 20 闭合前局部调整混合 + 10 远侧目标定向补采） | `act_c0`…`r4`；`r4_critical`；**`r5_critical_b8x2`（80 ep，200k，C0 基线）**；`r6_critical_b8x2`（90 ep，至 400k，远侧实验） | 2026-08-05：**基线锁定 r5-200k**；r6 不替换；停止以加步/大规模补数为 C0 主策略 |
-| `shape_pick_place_v1_c1`   | `train-151`…`190` | **40 / 8451** | `blue→up` ×20，`red→up` ×20 | **C1-lite**：红蓝同桌；目标色以外的块作为干扰；一律放置到 `up` | `act_c1_rb_up_ft50k_from_r5`（50k） | 2026-08-05：首轮 40 ep / 8451 frames 已完成；基于 C0 r5-200k 权重热启动；待红蓝同桌 rollout |
+| `shape_pick_place_v1_c1`   | `train-151`…`190` | **40 / 8451** | `blue→up` ×20，`red→up` ×20 | **C1-lite** 首轮：红蓝同桌 | `act_c1_rb_up_ft50k_from_r5`（50k）；`smolvla_c1_rb_up_lora_50k_b8x2`（50k） | 2026-08-05：ACT 无分色；SmolVLA 粗分色。当日「闭合弱」→ **8-06 更正**：缺 `--enable-gripper`；开夹爪复测可闭爪，红强蓝弱 |
+| `shape_pick_place_v1_c0_c1` | `train-061`…`150` + `train-151`…`210` | **150 / 32193** | C0 blue→up ×90；C1 red/blue→up ×60 | **C0+C1 混合**（单块 + 红蓝同桌）；训练机 dataset root | `smolvla_c0_c1_lora_50k_b8x2`（50k **中断** @3587） | 2026-08-06：本机 export + scp；待重训 |
 
 
 仍计划中、尚未落地：
@@ -163,7 +164,7 @@ python scripts/batch_check_episodes.py --run-glob "shape-pick-place-train-*" --r
 | `train-141`…`150` | 10    | C0 blue→up **远侧目标定向补采** | **c0**    | 2026-08-04；新增后 C0 合计 **90 ep / 19518 frames**；用于下一轮远侧表现验证 |
 | `train-151`…`170` | 20    | C1 blue→up；红蓝同桌；目标蓝块，红块为干扰 | **c1**    | 2026-08-05；metadata 标注 `source_object=blue`、`destination=up` |
 | `train-171`…`190` | 20    | C1 red→up；红蓝同桌；目标红块，蓝块为干扰 | **c1**    | 2026-08-05；metadata 标注 `source_object=red`、`destination=up`；C1 首轮合计 **40 ep** |
-| `train-191`…`210` | 20    | C1 配对消歧：5 组固定布局，每组依次 `red→up`、`blue→up`、交换红蓝位置后再 `red→up`、`blue→up`；奇数 episode 抓红，偶数 episode 抓蓝 | 待 export | 2026-08-05；每组 4 条；新增后 native C1 合计 **60 ep**；metadata 应保持 `source_object` / `destination=up` |
+| `train-191`…`210` | 20    | C1 配对消歧：5 组固定布局，每组 `red→up` / `blue→up` ×2（交换左右） | **c0_c1** | 2026-08-05/06；native C1 合计 **60 ep**；已 resume 进 `shape_pick_place_v1_c0_c1` |
 
 
 ---
@@ -185,7 +186,10 @@ python scripts/batch_check_episodes.py --run-glob "shape-pick-place-train-*" --r
 | `outputs/train/act_c0_r4_critical` | 同上 60 ep；抓取关键帧起点加权（前 20 / 后 10，`W=5`） | 100k（已完成） | 约 20k 时现场差；100k 诊断 18 次、6 成功；水平偏差多数约 1 cm 内；失败更多为把手对准 / 微调方向；勿覆盖 `act_c0_r4` |
 | `outputs/train/act_c0_r5_critical_b8x2` | `.../shape_pick_place_v1_c0`（**80 ep / 17327**） | 200k（已完成） | 双卡 batch 8×2，effective 16，fp16，关键帧加权；loss 约 `0.024–0.025`；格点诊断 **17/22**；中部随机约 **8/12**；**C0 部署/对照基线（2026-08-05 锁定）**；勿覆盖 |
 | `outputs/train/act_c0_r6_critical_b8x2` | `.../shape_pick_place_v1_c0`（**90 ep / 19518**；含远侧 10 条） | 400k（已完成） | 新目录从头训（非 resume r5）；关键帧加权；远侧有收益，中部随机 300k **7/12**、400k **2/6**；**不替换 r5 基线**；保留作远侧实验对照 |
-| `outputs/train/act_c1_rb_up_ft50k_from_r5` | `.../shape_pick_place_v1_c1`（**40 ep / 8451 frames**） | 50k（已完成） | 仅 C1 红蓝同桌数据；基于 `act_c0_r5_critical_b8x2` 200k 权重热启动；用于首轮颜色绑定验证；待 rollout |
+| `outputs/train/act_c1_rb_up_ft50k_from_r5` | `.../shape_pick_place_v1_c1`（**40 ep / 8451 frames**） | 50k（已完成） | 仅 C1；基于 `act_c0_r5_critical_b8x2` 热启；**无稳定红蓝分色** |
+| `outputs/train/smolvla_c1_rb_up_lora_50k_b8x2` | `.../shape_pick_place_v1_c1`（40 ep） | 50k（已完成） | 双卡 b8×2 FP16 LoRA r=64；粗 reach 分色；8-05「不闭合」实为未开 gripper 门控（8-06 更正）；勿覆盖 |
+| `outputs/train/smolvla_c0_90ep_lora_50k_b8x2` | `.../shape_pick_place_v1_c0_90ep`（**90 ep / 19518**；训练机路径，等同 `c0`） | 50k（已完成） | C0-only SmolVLA LoRA；待真机 rollout（8-06） |
+| `outputs/train/smolvla_c0_c1_lora_50k_b8x2` | `.../shape_pick_place_v1_c0_c1`（**150 ep / 32193**） | 50k（**中断** @3587） | 过夜 JOB2 SIGHUP；无 5k ckpt；8-06 新目录重训 |
 
 
 推理服务加载的是 checkpoint 目录（如 `.../checkpoints/last/pretrained_model`），与 dataset root 可分开指定；换策略时两者都要核对。

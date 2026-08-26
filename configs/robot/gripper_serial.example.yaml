@@ -1,0 +1,18 @@
+# Copy to configs/local/gripper_serial.local.yaml and calibrate every value for
+# the connected gripper. The placeholders below intentionally command no range.
+
+serial:
+  port: null
+  baudrate: 115200
+  timeout_s: 0.5
+  response_delay_s: 0.1
+  device_address: 1
+  subdivision: 32
+
+teleop:
+  open_angle_deg: 0.0
+  close_angle_deg: 0.0
+  speed_rad_s: 1.0
+  initial_open_fraction: 1.0
+  # Fraction of the calibrated open-to-close range used for teleoperation.
+  working_open_fraction: 1.0

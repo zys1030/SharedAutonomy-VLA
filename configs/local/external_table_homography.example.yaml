@@ -1,0 +1,23 @@
+# Written by scripts/calibrate_external_table_homography.py.
+# Do not copy these placeholder numbers into a live run.
+#
+# H maps undistorted pixel [u, v, 1] to table meters [X, Y, w].
+# Checkerboard: 9x12 squares -> 8x11 inner corners, 15 mm; axes aligned
+# with the gripper at J6 = 0.
+
+table_homography:
+  valid: false
+  image_width: 640
+  image_height: 480
+  inner_corners: [8, 11]
+  square_m: 0.015
+  gripper_ref: j6_zero
+  flip_x: false
+  flip_y: false
+  swap_axes: false
+  rms_reproj_m: 0.0
+  captured_utc: null
+  H:
+    - [1.0, 0.0, 0.0]
+    - [0.0, 1.0, 0.0]
+    - [0.0, 0.0, 1.0]

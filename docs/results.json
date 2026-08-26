@@ -1,0 +1,257 @@
+{
+  "schema_version": "0.2.0",
+  "status": "frozen",
+  "experiment": {
+    "experiment_id": "rq2_block_rotation_manual_vs_shared_autonomy_70ep",
+    "evaluation_date": "2026-08-24",
+    "research_question": "Under the same demonstration budget and training recipe, does shared-autonomy-assisted data collection improve closed-loop policy success over manual data collection?"
+  },
+  "task": {
+    "task_id": "shape_pick_place_v1",
+    "evaluation_variant": "block_rotation_rq2",
+    "instruction": "Pick up the red cube and place it in the UP region.",
+    "object": "red cube",
+    "target_region": "UP",
+    "initial_pose_grid": {
+      "position_ids": [
+        "left_near",
+        "center_near",
+        "right_near",
+        "left_middle",
+        "center_middle",
+        "right_middle",
+        "left_far",
+        "center_far",
+        "right_far"
+      ],
+      "yaw_deg_wrap90": [
+        0.0,
+        22.5,
+        -22.5,
+        45.0
+      ],
+      "condition_count": 36,
+      "exact_site_coordinates_public": false
+    }
+  },
+  "primary_metric": {
+    "metric_id": "hard_success",
+    "unit": "rollout",
+    "success_requires_all": [
+      "The gripper establishes a grasp across two opposing faces of the red cube; a grasp on an edge is not a successful grasp.",
+      "The policy lifts the red cube clear of its initial support surface.",
+      "The policy releases the red cube in the UP target region, where it remains at the end of the rollout.",
+      "The rollout is not terminated by a safety abort."
+    ],
+    "not_required_for_success": [
+      "The gripper yaw matches the intended sign or angle exactly.",
+      "The grasp is centered or visually perfect, provided that the gripper contacts two opposing faces rather than an edge.",
+      "The motion path is perfectly smooth."
+    ],
+    "failure_examples": [
+      "The gripper does not reach a graspable position.",
+      "The gripper grasps on an edge, even if the cube is subsequently lifted or placed in the target region.",
+      "The cube is contacted or grasped but is not lifted clear of the support surface.",
+      "The cube slips or is dropped before placement.",
+      "The cube is released outside the UP target region or does not remain there at the end of the rollout.",
+      "The rollout times out, remains incomplete, or is terminated by a safety abort."
+    ],
+    "adjudication": "Human observation supported by rollout video/replay notes.",
+    "quality_note": "Yaw-sign errors, under-rotation, over-rotation, XY offsets, and other non-fatal execution imperfections remain quality annotations. Edge grasp is a hard failure, not a quality-only annotation."
+  },
+  "evaluation_protocol": {
+    "design": "paired_grid",
+    "conditions": "9 categorical XY positions x 4 wrap90 yaw values",
+    "attempts_per_policy": 36,
+    "pairing": "Both policies were evaluated on the same physical arrangement for each condition.",
+    "policy_execution": "closed_loop_real_robot_rollout",
+    "motion_gate_required": true,
+    "scope_limit": "This protocol does not establish performance over arbitrary continuous XY positions or arbitrary yaw angles."
+  },
+  "training_comparison": {
+    "shared_recipe": {
+      "policy_family": "SmolVLA",
+      "adaptation": "expert_only",
+      "training_steps": 50000,
+      "precision": "bf16",
+      "batch_configuration": "8 x 2",
+      "base_model_public_id": "lerobot/smolvla_base",
+      "vision_language_backbone_public_id": "HuggingFaceTB/SmolVLM2-500M-Video-Instruct"
+    },
+    "manual": {
+      "collection_mode": "manual",
+      "dataset": {
+        "public_id": null,
+        "episodes": 70,
+        "frames": 15829,
+        "hugging_face_url": null,
+        "revision": null,
+        "checksum": null,
+        "license": null
+      },
+      "checkpoint": {
+        "public_id": null,
+        "hugging_face_url": null,
+        "revision": null,
+        "checksum": null,
+        "license": null
+      }
+    },
+    "shared_autonomy": {
+      "collection_mode": "shared_autonomy",
+      "assistance": "Human controls XYZ and gripper; the yaw assistant controls J6 alignment.",
+      "dataset": {
+        "public_id": null,
+        "episodes": 70,
+        "frames": 14212,
+        "hugging_face_url": null,
+        "revision": null,
+        "checksum": null,
+        "license": null
+      },
+      "checkpoint": {
+        "public_id": null,
+        "hugging_face_url": null,
+        "revision": null,
+        "checksum": null,
+        "license": null
+      }
+    }
+  },
+  "condition_grid": {
+    "matrix_semantics": "Rows follow task.initial_pose_grid.position_ids; columns follow task.initial_pose_grid.yaw_deg_wrap90. true means hard_success.",
+    "manual": [
+      [true, true, false, false],
+      [true, true, true, true],
+      [true, true, true, true],
+      [true, true, true, false],
+      [true, true, true, false],
+      [true, true, true, true],
+      [false, false, false, false],
+      [false, true, true, true],
+      [true, false, true, false]
+    ],
+    "shared_autonomy": [
+      [true, true, true, true],
+      [true, true, true, true],
+      [true, true, true, true],
+      [true, true, true, false],
+      [true, true, true, true],
+      [true, true, true, false],
+      [true, true, true, true],
+      [true, true, true, true],
+      [true, true, true, true]
+    ]
+  },
+  "results": {
+    "manual": {
+      "successes": 25,
+      "attempts": 36
+    },
+    "shared_autonomy": {
+      "successes": 34,
+      "attempts": 36
+    },
+    "paired_outcomes": {
+      "both_success": 24,
+      "manual_only_success": 1,
+      "shared_autonomy_only_success": 10,
+      "both_failure": 1
+    },
+    "by_distance_band": {
+      "near": {
+        "manual": [10, 12],
+        "shared_autonomy": [12, 12]
+      },
+      "middle": {
+        "manual": [10, 12],
+        "shared_autonomy": [10, 12]
+      },
+      "far": {
+        "manual": [5, 12],
+        "shared_autonomy": [12, 12]
+      }
+    },
+    "by_yaw_deg_wrap90": {
+      "0.0": {
+        "manual": [7, 9],
+        "shared_autonomy": [9, 9]
+      },
+      "22.5": {
+        "manual": [7, 9],
+        "shared_autonomy": [9, 9]
+      },
+      "-22.5": {
+        "manual": [7, 9],
+        "shared_autonomy": [9, 9]
+      },
+      "45.0": {
+        "manual": [4, 9],
+        "shared_autonomy": [7, 9]
+      }
+    }
+  },
+  "public_record_schema": {
+    "file": "docs/evaluation_records.csv",
+    "record_count": 36,
+    "fields": [
+      "condition_id",
+      "position_id",
+      "distance_band",
+      "lateral_band",
+      "initial_yaw_deg_wrap90",
+      "manual_success",
+      "manual_primary_failure_type",
+      "manual_quality_flags",
+      "manual_note",
+      "shared_autonomy_success",
+      "shared_autonomy_primary_failure_type",
+      "shared_autonomy_quality_flags",
+      "shared_autonomy_note"
+    ],
+    "failure_types": [
+      "edge_grasp",
+      "no_grasp",
+      "no_lift",
+      "grasp_slip_or_drop",
+      "placement_outside_target",
+      "timeout_or_incomplete",
+      "safety_abort",
+      "other"
+    ],
+    "failure_type_definitions": {
+      "edge_grasp": "The gripper grasps on an edge rather than across two opposing faces. This remains the primary failure type even if the cube is lifted or placed afterward.",
+      "no_grasp": "The rollout never establishes an effective grasp on the cube.",
+      "no_lift": "The gripper contacts or holds the cube but does not lift it clear of the support surface.",
+      "grasp_slip_or_drop": "The grasp loses the cube through slipping or dropping before target placement is completed; the field note does not need to establish that a clear lift occurred first.",
+      "placement_outside_target": "The cube is released outside the UP region or does not remain in the region at rollout end.",
+      "timeout_or_incomplete": "The rollout reaches its time or step limit without completing the task.",
+      "safety_abort": "The rollout is terminated by a safety gate, emergency stop, or other safety intervention.",
+      "other": "The failure does not fit another type and must be explained in the note."
+    },
+    "quality_flags": [
+      "reach_error",
+      "yaw_alignment_error",
+      "under_rotation",
+      "over_rotation",
+      "wrong_rotation_sign",
+      "unstable_grasp",
+      "slip",
+      "xy_offset",
+      "multiple_attempts",
+      "other"
+    ],
+    "classification_rules": [
+      "primary_failure_type is null when hard_success is true and contains exactly one value when hard_success is false.",
+      "quality_flags may contain zero or more values for either successful or failed rollouts.",
+      "edge_grasp is always a hard failure and must not be represented only as a quality flag."
+    ],
+    "quality_flags_serialization": "Zero or more enum values separated by |; an empty field means no quality flag.",
+    "notes_status": "All 36 normalized English records were audited against the private XLSX field notes. Success labels, numeric observations, spatial directions, edge grasps, and slip events match the source; no machine identity, absolute path, person name, or exact site coordinate is included."
+  },
+  "provenance": {
+    "source_evidence_status": "Evaluation labels and dataset counts were verified against private source records; private paths are intentionally not published.",
+    "source_private_commit": null,
+    "public_release_tag": null
+  }
+}

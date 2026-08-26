@@ -1,0 +1,44 @@
+# Reference profiles for the Cartesian SpaceMouse collector.
+#
+# This file is documentation, not a runtime configuration. The collector does
+# not load it automatically. Use CLI arguments for portable settings and
+# ignored configs/local/*.local.yaml files for device identity, ready pose,
+# measured workspace geometry, and other machine-specific values.
+
+no_motion_preview:
+  control_rate_hz: 50.0
+  max_linear_speed_m_s: 0.05
+  allow_rotation: false
+  allow_tool_yaw: false
+  enable_yaw_assist: false
+
+# Profile used for the reported 10 Hz demonstration collections. Values that
+# depend on device mounting or operator setup must be validated independently.
+reported_collection_profile:
+  control_rate_hz: 10.0
+  move_increment_z_m: 0.01
+  move_increment_xy_m: 0.02
+  max_joint_rate_deg_s: 50.0
+  canfd_follow: false
+  canfd_smoothing: 50
+  ik_source: connected_arm
+  lock_z_for_planar_reaching: true
+  spacemouse:
+    deadzone: 0.1
+    mount_orientation: vertical_up
+    # Installation-specific transform; keep the measured value in ignored local
+    # configuration and fill it in for the target SpaceMouse mounting.
+    base_xy_yaw_deg: null
+    input_timeout_s: 0.1
+    drain_max_reads: 128
+    allow_rotation: false
+    allow_tool_yaw: false
+
+# The runtime freezes measured start orientation and loads measured workspace
+# geometry from configs/local/rm65_safety.local.yaml before motion is enabled.
+safety_reference:
+  max_speed_m_s: 0.05
+  max_acceleration_m_s2: 0.25
+  orientation_tolerance_rad: 0.05
+  input_timeout_s: 0.1
+  robot_state_timeout_s: 0.05

@@ -1,0 +1,14 @@
+# Example machine-local overrides for manual Cartesian teleop.
+# Copy to manual_cartesian.local.yaml and replace ready_pose with a pose verified
+# for the target robot cell.
+# Motion still requires BOTH enable_motion: true AND CLI --allow-motion.
+
+enable_motion: false
+
+ready_pose:
+  joint_position_deg: null
+  gripper_open_fraction: 1.0
+  canfd_follow: false
+  canfd_smoothing: 50
+  settle_s: 2.0
+  task_id: null

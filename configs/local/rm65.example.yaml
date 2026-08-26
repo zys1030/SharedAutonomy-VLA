@@ -1,0 +1,15 @@
+# Copy to rm65.local.yaml and keep the copy untracked.
+# Never commit a controller address or machine-specific joint limits.
+
+id: rm65
+ip: null
+port: 8080
+
+# Motion remains disabled unless both local configuration and the CLI gate agree.
+set_run_mode_on_connect: false
+enable_motion: false
+joint_limits_deg: null
+max_relative_target_deg: 1.0
+
+use_controller_gripper: false
+cameras: {}

@@ -1,0 +1,122 @@
+# Python bytecode and interpreter caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Packaging and build outputs
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Test, type-checker, linter, and coverage caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Jupyter and interactive Python
+.ipynb_checkpoints/
+profile_default/
+
+# Editors and IDEs
+.idea/
+.vscode/
+*.code-workspace
+*.swp
+*.swo
+*~
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Environment variables, secrets, and machine-local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.local.yaml
+*.local.yml
+*.local.toml
+/configs/local/*
+!/configs/local/*.example.yaml
+
+# Logs, temporary files, and crash dumps
+*.log
+*.tmp
+*.temp
+*.bak
+*.orig
+*.pid
+*.dmp
+/logs/
+/tmp/
+/temp/
+
+# Local caches
+/.cache/
+/huggingface/
+/lerobot_cache/
+
+# Raw robot datasets and recordings
+/data/
+/datasets/
+/recordings/
+/captures/
+/rosbag2_*/
+*.bag
+*.db3
+*.mcap
+*.h5
+*.hdf5
+*.parquet
+*.arrow
+
+# Training and experiment runtime outputs
+/outputs/
+/runs/
+/checkpoints/
+/weights/
+/models/
+/wandb/
+/mlruns/
+/tensorboard/
+
+# Model weights and exported runtimes
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+*.onnx
+*.engine
+
+# Native SDK/build artifacts
+*.dll
+*.dylib
+*.so
+*.pyd
+
+# Small, intentional test fixtures may override data/model rules above.
+!tests/fixtures/**/*.h5
+!tests/fixtures/**/*.hdf5
+!tests/fixtures/**/*.parquet
+!tests/fixtures/**/*.arrow
+!tests/fixtures/**/*.pt
+!tests/fixtures/**/*.pth
+!tests/fixtures/**/*.safetensors

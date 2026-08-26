@@ -1,0 +1,14 @@
+# Copy to wrist_realsense.local.yaml and keep the copy untracked.
+camera:
+  type: realsense
+  serial_number: null
+  width: 640
+  height: 480
+  fps: 30
+  color_format: bgr8
+  depth_format: z16
+  warmup_frames: 60
+  calibration_path: configs/local/wrist_realsense_calibration.local.yaml
+
+# Store the device-specific intrinsics and hand-eye transform in the referenced
+# untracked local file. Do not commit camera serial numbers or calibration values.

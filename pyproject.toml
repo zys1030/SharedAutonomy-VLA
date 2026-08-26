@@ -1,0 +1,95 @@
+[build-system]
+requires = ["setuptools>=77,<81"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sharedautonomy-vla"
+version = "0.1.0"
+description = "Shared-autonomy-assisted demonstration collection and corrective VLA fine-tuning for real-robot manipulation."
+readme = "README.md"
+authors = [
+    { name = "Yun-Sheng Zhao" },
+]
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12,<3.13"
+keywords = [
+    "robotics",
+    "shared-autonomy",
+    "imitation-learning",
+    "vision-language-action",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "lerobot==0.6.0",
+    "numpy>=2.0,<2.3",
+    "opencv-python-headless>=4.9,<4.14",
+    "PyYAML>=6,<7",
+]
+
+[project.optional-dependencies]
+dataset = [
+    "lerobot[dataset]==0.6.0",
+]
+dev = [
+    "lerobot[dataset]==0.6.0",
+    "pytest>=8.1,<10",
+    "ruff>=0.14.1,<1",
+]
+hardware = [
+    "comtypes>=1.4,<2; sys_platform == 'win32'",
+    "hidapi>=0.15,<0.16",
+    "pyrealsense2>=2.55.1.6486,<2.57; sys_platform != 'darwin'",
+    "pyserial>=3.5,<4",
+    "Robotic_Arm==1.1.5",
+]
+smolvla = [
+    "lerobot[dataset,peft,smolvla]==0.6.0",
+]
+visualization = [
+    "matplotlib>=3.10.3,<4",
+    "Pillow>=10,<13",
+]
+
+[project.urls]
+Repository = "https://github.com/zys1030/SharedAutonomy-VLA"
+Issues = "https://github.com/zys1030/SharedAutonomy-VLA/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sharedautonomy*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "-ra",
+    "--strict-config",
+    "--strict-markers",
+]
+markers = [
+    "core: safety-critical paths; default for day-to-day and AI-assisted changes",
+    "extended: schema and adapter coverage; run before hardware sessions or release",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+src = ["sharedautonomy", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "B",
+    "UP",
+]
+
+[tool.ruff.format]
+docstring-code-format = true

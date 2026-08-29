@@ -22,13 +22,22 @@ universally better than manual control.
 
 ## Current status
 
-This repository contains the source code and documentation release. External
-publication of the datasets, videos, and trained checkpoints is intentionally
-deferred while ownership, release scope, and upstream model terms are being
-confirmed.
+This repository contains the source code and documentation release. The two
+exported datasets and the final expert-only SmolVLA checkpoints are published
+on the Hugging Face Hub. Raw native recordings, standalone private videos,
+training logs, and machine-local artifacts remain outside this repository.
 
 The repository therefore does not include the raw datasets, model weights,
 training logs, machine-local configuration, or private commissioning notes.
+
+## Public artifacts
+
+| Artifact | Public repository | License |
+| --- | --- | --- |
+| Manual 70 dataset | [`zys1030/sharedautonomy-vla-block-rot-manual-70ep`](https://huggingface.co/datasets/zys1030/sharedautonomy-vla-block-rot-manual-70ep) | CC BY 4.0 |
+| Shared Autonomy 70 dataset | [`zys1030/sharedautonomy-vla-block-rot-sa-70ep`](https://huggingface.co/datasets/zys1030/sharedautonomy-vla-block-rot-sa-70ep) | CC BY 4.0 |
+| Manual 70 SmolVLA checkpoint | [`zys1030/smolvla-block-rot-manual-70ep-50k`](https://huggingface.co/zys1030/smolvla-block-rot-manual-70ep-50k) | Apache-2.0 |
+| Shared Autonomy 70 SmolVLA checkpoint | [`zys1030/smolvla-block-rot-sa-70ep-50k`](https://huggingface.co/zys1030/smolvla-block-rot-sa-70ep-50k) | Apache-2.0 |
 
 ## Main result
 
@@ -176,10 +185,11 @@ The feature order and units are defined in [`docs/datasets.md`](docs/datasets.md
 
 ### Train, serve, and roll out a policy
 
-Training requires a local exported dataset, the upstream model assets, and the
-corresponding training dependencies. The locked recipe and release boundary
-are in [`docs/training.md`](docs/training.md); the public repository does not
-include the project datasets or final checkpoints.
+Training requires a local exported dataset or one of the public dataset
+repositories above, the upstream model assets, and the corresponding training
+dependencies. The locked recipe and checkpoint links are in
+[`docs/training.md`](docs/training.md); the public GitHub repository does not
+vendor the datasets or final checkpoints.
 
 The inference servers do not connect to robot hardware or enable motion:
 
@@ -217,14 +227,15 @@ a usable emergency-stop path. See [`docs/hardware.md`](docs/hardware.md).
 
 ## Release boundary
 
-The source code is licensed under the [MIT License](LICENSE). Datasets, videos,
-trained checkpoints, upstream model weights, and media may require separate ownership,
-attribution, and licensing decisions. Those assets are intentionally not
-included in the current repository entry point.
+The source code is licensed under the [MIT License](LICENSE). The published
+datasets use CC BY 4.0 and the published fine-tuned checkpoints use
+Apache-2.0, with upstream attribution recorded in their model cards. Raw
+recordings, standalone private videos, training logs, and machine-local media
+remain outside the repository.
 
 ## Citation
 
 For the project method and locked comparison, cite the repository and refer
-to [`docs/results.md`](docs/results.md) for the evaluation protocol. External
-dataset and checkpoint citations will be added only if those artifacts are
-formally released.
+to [`docs/results.md`](docs/results.md) for the evaluation protocol. Public
+dataset and checkpoint links are also recorded in
+[`docs/datasets.md`](docs/datasets.md) and [`docs/training.md`](docs/training.md).

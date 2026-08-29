@@ -18,9 +18,20 @@ SharedAutonomy-VLA 是一个面向真实机器人的研究系统，用于研究�
 
 ## 当前状态
 
-当前仓库提供源代码与公开文档。数据集、视频和训练 checkpoint 的外部发布暂缓，待进一步确认数据所有权、发布范围以及上游模型条款。
+当前仓库提供源代码与公开文档。两份导出数据集和最终的 expert-only
+SmolVLA checkpoint 已发布到 Hugging Face Hub。原始 native 记录、独立的
+private 视频、训练日志和机器本地产物仍不属于本仓库。
 
 因此，仓库入口不包含原始数据集、模型权重、训练日志、机器本地配置或私有调试记录。
+
+## 公开资产
+
+| 资产 | 公开仓库 | 许可证 |
+| --- | --- | --- |
+| Manual 70 数据集 | [`zys1030/sharedautonomy-vla-block-rot-manual-70ep`](https://huggingface.co/datasets/zys1030/sharedautonomy-vla-block-rot-manual-70ep) | CC BY 4.0 |
+| Shared Autonomy 70 数据集 | [`zys1030/sharedautonomy-vla-block-rot-sa-70ep`](https://huggingface.co/datasets/zys1030/sharedautonomy-vla-block-rot-sa-70ep) | CC BY 4.0 |
+| Manual 70 SmolVLA checkpoint | [`zys1030/smolvla-block-rot-manual-70ep-50k`](https://huggingface.co/zys1030/smolvla-block-rot-manual-70ep-50k) | Apache-2.0 |
+| Shared Autonomy 70 SmolVLA checkpoint | [`zys1030/smolvla-block-rot-sa-70ep-50k`](https://huggingface.co/zys1030/smolvla-block-rot-sa-70ep-50k) | Apache-2.0 |
 
 ## 主要结果
 
@@ -135,7 +146,7 @@ python scripts/export_lerobot_dataset.py <episode_dir> --out-root <dataset_root>
 
 ### 训练、serve 与 rollout
 
-训练需要本地导出的数据集、上游模型资源和对应训练依赖。锁定的训练方案与发布边界见 [`docs/training.zh-CN.md`](docs/training.zh-CN.md)；公开仓库不包含项目数据集和最终 checkpoint。
+训练需要本地导出的数据集或上述公开数据集仓库、上游模型资源和对应训练依赖。锁定的训练方案和 checkpoint 链接见 [`docs/training.zh-CN.md`](docs/training.zh-CN.md)；GitHub 公开仓库不内置数据集和最终 checkpoint。
 
 推理 server 不会连接机器人硬件，也不会启用运动：
 
@@ -161,8 +172,8 @@ python scripts/rollout_act_policy.py --ip <RM65_IP> --infer-url http://<policy_h
 
 ## 发布边界
 
-源代码采用 [MIT License](LICENSE)。数据集、视频、训练 checkpoint、上游模型权重和媒体资源可能需要单独确认所有权、署名和许可证，因此这些资产目前不会作为仓库入口的一部分发布。
+源代码采用 [MIT License](LICENSE)。已发布的数据集采用 CC BY 4.0，已发布的微调 checkpoint 采用 Apache-2.0，并在各自模型卡中保留上游 attribution。原始记录、独立的 private 视频、训练日志和机器本地媒体仍不进入仓库。
 
 ## 引用
 
-如需引用项目方法和锁定对比实验，请引用本仓库，并参阅 [`docs/results.zh-CN.md`](docs/results.zh-CN.md) 中的评估协议。只有在相关数据集和 checkpoint 正式发布后，才会补充其外部引用信息。
+如需引用项目方法和锁定对比实验，请引用本仓库，并参阅 [`docs/results.zh-CN.md`](docs/results.zh-CN.md) 中的评估协议。数据集和 checkpoint 的公开链接也集中记录在 [`docs/datasets.zh-CN.md`](docs/datasets.zh-CN.md) 与 [`docs/training.zh-CN.md`](docs/training.zh-CN.md) 中。

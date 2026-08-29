@@ -2,16 +2,16 @@
 
 语言：[English](datasets.md) | 简体中文
 
-> 发布状态：本文记录锁定对照所使用的数据集事实，但数据集和视频当前尚未公开发布。本文暂不声明公开仓库 ID、不可变 revision、checksum 或数据集/媒体许可证。
+> 发布状态：锁定对照使用的两份导出数据集已在 Hugging Face Hub 以 CC BY 4.0 公开发布。原始 native 记录和独立的 private 视频仍不属于公开发布范围。
 
 ## 1. 锁定对照数据集
 
 主对照使用两份针对同一任务契约采集、并采用相同映射导出的数据集：
 
-| 数据集 | 采集模式 | Episodes | Frames | FPS | 任务 |
-| --- | --- | ---: | ---: | ---: | --- |
-| Manual 70 | 人工笛卡尔遥操作和夹爪控制 | 70 | 15,829 | 10 | `shape_pick_place_v1 / block_rotation_rq2` |
-| Shared Autonomy 70 | 人工笛卡尔/夹爪控制 + 有界 J6 yaw 辅助 | 70 | 14,212 | 10 | `shape_pick_place_v1 / block_rotation_rq2` |
+| 数据集 | 采集模式 | Episodes | Frames | FPS | 任务 | 公开仓库 |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| Manual 70 | 人工笛卡尔遥操作和夹爪控制 | 70 | 15,829 | 10 | `shape_pick_place_v1 / block_rotation_rq2` | [`zys1030/sharedautonomy-vla-block-rot-manual-70ep`](https://huggingface.co/datasets/zys1030/sharedautonomy-vla-block-rot-manual-70ep) |
+| Shared Autonomy 70 | 人工笛卡尔/夹爪控制 + 有界 J6 yaw 辅助 | 70 | 14,212 | 10 | `shape_pick_place_v1 / block_rotation_rq2` | [`zys1030/sharedautonomy-vla-block-rot-sa-70ep`](https://huggingface.co/datasets/zys1030/sharedautonomy-vla-block-rot-sa-70ep) |
 
 两侧匹配 episode 预算。由于示教时长不同，frame 数不完全相同。稳定任务文本和公开边界见 [`tasks/shape_pick_place_v1.zh-CN.md`](tasks/shape_pick_place_v1.zh-CN.md)。
 
@@ -65,13 +65,13 @@ native episode
 
 只有上述两份 70 episode 数据集支撑锁定的 Manual vs Shared Autonomy 结果。早期 ACT、对齐方块、带把手、颜色绑定、部分采集和已被替代的快照都属于开发历史，不得混入当前对照；只有在有助于解释最终实验时，公开文档才摘要说明其作用。
 
-当前代码发布不包含 raw episode、导出数据集、视频、训练日志、模型权重、机器本地配置或 private 现场备注。
+当前代码发布不包含 raw episode、独立的 private 视频、训练日志、模型权重、机器本地配置或 private 现场备注。导出的 LeRobot 数据集托管在上表公开仓库中。
 
 ## 5. 发布边界
 
-当前代码/文档发布公开的是数据契约和血缘，而不是原始 episode、导出数据集
-或视频。未来如发布外部数据集，其公开元数据必须与本文及
+当前代码/文档发布公开的是数据契约和血缘，而不是原始 episode 或独立的
+private 视频。两份公开导出数据集采用 CC BY 4.0；其公开元数据必须与本文及
 [`results.json`](results.json) 中锁定的任务、数量、features 和限制保持一致。
-训练配方见 [`training.zh-CN.md`](training.zh-CN.md)，评测结果见
+对应的公开 checkpoint 见 [`training.zh-CN.md`](training.zh-CN.md)，评测结果见
 [`results.zh-CN.md`](results.zh-CN.md)，解释边界见
 [`limitations.zh-CN.md`](limitations.zh-CN.md)。

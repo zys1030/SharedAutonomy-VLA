@@ -46,6 +46,11 @@ The runtime may retain optional interfaces such as post-close hold and correctiv
 
 ## 5. Release and reproducibility limits
 
-The current code/document release excludes raw datasets, videos, training logs, model weights, machine-local configuration, and private field notes. Deferred dataset and checkpoint metadata requirements are maintained in [`datasets.md`](datasets.md) and [`training.md`](training.md); when external publication resumes, revisions, checksums, licenses, and attribution must be added without changing the locked evaluation labels or aggregate counts.
+The current code/document release excludes raw native recordings, standalone
+private videos, training logs, model weights, machine-local configuration, and
+private field notes. The exported datasets and final checkpoints are hosted
+externally; their public links, licenses, and provenance are maintained in
+[`datasets.md`](datasets.md) and [`training.md`](training.md) without changing
+the locked evaluation labels or aggregate counts.
 
 The public repository should publish only sanitized records and reproducible metadata. Raw site coordinates, machine identities, local paths, intermediate checkpoints, runtime outputs, and contaminated legacy snapshots remain outside the public release.

@@ -81,40 +81,40 @@
     "manual": {
       "collection_mode": "manual",
       "dataset": {
-        "public_id": null,
+        "public_id": "zys1030/sharedautonomy-vla-block-rot-manual-70ep",
         "episodes": 70,
         "frames": 15829,
-        "hugging_face_url": null,
-        "revision": null,
+        "hugging_face_url": "https://huggingface.co/datasets/zys1030/sharedautonomy-vla-block-rot-manual-70ep",
+        "revision": "0ddd0c3016d8355b4eb5af0cdcee4e3f03c08347",
         "checksum": null,
-        "license": null
+        "license": "cc-by-4.0"
       },
       "checkpoint": {
-        "public_id": null,
-        "hugging_face_url": null,
-        "revision": null,
-        "checksum": null,
-        "license": null
+        "public_id": "zys1030/smolvla-block-rot-manual-70ep-50k",
+        "hugging_face_url": "https://huggingface.co/zys1030/smolvla-block-rot-manual-70ep-50k",
+        "revision": "cf680df425933b5bfc8867abf8a242294ad33c77",
+        "checksum": "e654ecf50ba1092b45124fe6a6734e94c052850d7bcf1a94a9d930c46304a4c9",
+        "license": "apache-2.0"
       }
     },
     "shared_autonomy": {
       "collection_mode": "shared_autonomy",
       "assistance": "Human controls XYZ and gripper; the yaw assistant controls J6 alignment.",
       "dataset": {
-        "public_id": null,
+        "public_id": "zys1030/sharedautonomy-vla-block-rot-sa-70ep",
         "episodes": 70,
         "frames": 14212,
-        "hugging_face_url": null,
-        "revision": null,
+        "hugging_face_url": "https://huggingface.co/datasets/zys1030/sharedautonomy-vla-block-rot-sa-70ep",
+        "revision": "3078c5e10aeec5ef76d105952aff8db5419293b8",
         "checksum": null,
-        "license": null
+        "license": "cc-by-4.0"
       },
       "checkpoint": {
-        "public_id": null,
-        "hugging_face_url": null,
-        "revision": null,
-        "checksum": null,
-        "license": null
+        "public_id": "zys1030/smolvla-block-rot-sa-70ep-50k",
+        "hugging_face_url": "https://huggingface.co/zys1030/smolvla-block-rot-sa-70ep-50k",
+        "revision": "b9bd21a35f9637bb70dd0bf5fb0af12462350373",
+        "checksum": "8613bfa066c5c30ee34e47f89a68be929173ef386a6c20a3ffed5501ed8c4296",
+        "license": "apache-2.0"
       }
     }
   },

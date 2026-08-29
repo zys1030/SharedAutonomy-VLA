@@ -46,6 +46,6 @@
 
 ## 5. 发布与复现限制
 
-当前代码/文档发布不包含原始数据集、视频、训练日志、模型权重、机器本地配置或 private 现场备注。暂缓的数据集和 checkpoint 元数据要求统一维护在 [`datasets.zh-CN.md`](datasets.zh-CN.md) 与 [`training.zh-CN.md`](training.zh-CN.md)；恢复外部发布时，再补充 revision、checksum、许可证和 attribution，且不得改变已经锁定的评测标签或汇总数字。
+当前代码/文档发布不包含原始 native 记录、独立的 private 视频、训练日志、模型权重、机器本地配置或 private 现场备注。导出的数据集和最终 checkpoint 托管在外部；其公开链接、许可证和 provenance 统一维护在 [`datasets.zh-CN.md`](datasets.zh-CN.md) 与 [`training.zh-CN.md`](training.zh-CN.md)，且不改变已经锁定的评测标签或汇总数字。
 
 公开仓库只应发布经过清理的记录和可复现元数据。现场精确坐标、机器身份、本地路径、中间 checkpoint、运行时输出和污染的 legacy 快照不进入 public release。

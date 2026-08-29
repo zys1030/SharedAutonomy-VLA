@@ -2,7 +2,7 @@
 
 语言：[English](results.md) | 简体中文
 
-> 发布状态：数值记录和评测标签已经冻结。数据集、视频和 checkpoint 的外部发布当前暂缓；本文不声明外部 revision、checksum 或许可证。
+> 发布状态：数值记录和评测标签已经冻结。两份导出数据集和最终 checkpoint 已在 Hugging Face Hub 公开；原始记录、独立的 private 视频和训练日志仍不属于公开发布范围。
 
 ## 结果摘要
 
@@ -145,8 +145,10 @@ Shared Autonomy 采集过程中，人类控制笛卡尔平移和夹爪，yaw ass
 
 - [`results.json`](results.json)：权威的机器可读协议、条件网格、汇总结果和发布元数据；
 - [`evaluation_records.csv`](evaluation_records.csv)：36 个配对条件的标准化成功标签、主失败类型、质量标记和公开备注；
-- [`datasets.zh-CN.md`](datasets.zh-CN.md)：锁定的数据集数量、公开数据契约、血缘和暂缓的发布元数据；
-- [`training.zh-CN.md`](training.zh-CN.md)：锁定训练配方、去敏的 loss/gradient/learning-rate 曲线、checkpoint 选择和训练解释限制；
+- [`datasets.zh-CN.md`](datasets.zh-CN.md)：锁定的数据集数量、公开数据契约、血缘和公开数据集链接；
+- [`training.zh-CN.md`](training.zh-CN.md)：锁定训练配方、去敏的 loss/gradient/learning-rate 曲线、checkpoint 选择和公开 checkpoint 链接；
+- 公开数据集：[`Manual 70`](https://huggingface.co/datasets/zys1030/sharedautonomy-vla-block-rot-manual-70ep) 与 [`Shared Autonomy 70`](https://huggingface.co/datasets/zys1030/sharedautonomy-vla-block-rot-sa-70ep)；
+- 公开 checkpoint：[`Manual 70 SmolVLA`](https://huggingface.co/zys1030/smolvla-block-rot-manual-70ep-50k) 与 [`Shared Autonomy 70 SmolVLA`](https://huggingface.co/zys1030/smolvla-block-rot-sa-70ep-50k)；
 - [`../scripts/plot_evaluation_results.py`](../scripts/plot_evaluation_results.py)：直接根据 JSON 和 CSV 重新生成公开 SVG。
 
 ```bash

@@ -2,7 +2,7 @@
 
 语言：[English](training.md) | 简体中文
 
-> 状态：本文记录解释锁定对照所需的训练事实和去敏曲线。数据集、视频和 checkpoint 的外部发布当前暂缓；原始日志和本机产物继续保留在 private 范围内。
+> 状态：本文记录解释锁定对照所需的训练事实、公开数据集链接、公开 checkpoint 链接和去敏曲线。原始记录、独立的 private 视频、原始日志和本机产物继续保留在 private 范围内。
 
 ## 1. 范围
 
@@ -32,11 +32,12 @@ action chunk size 为 50。
 
 训练配置记录的模型初始化为：
 
-- Base policy：`lerobot/smolvla_base`
-- Vision-language backbone：`HuggingFaceTB/SmolVLM2-500M-Video-Instruct`
+- Base policy：[`lerobot/smolvla_base`](https://huggingface.co/lerobot/smolvla_base)
+- Vision-language backbone：[`HuggingFaceTB/SmolVLM2-500M-Video-Instruct`](https://huggingface.co/HuggingFaceTB/SmolVLM2-500M-Video-Instruct)
 
 这里记录上游标识是为了复现。上游许可和微调 checkpoint 的外部再发布权限
-独立于本项目代码发布，当前仍暂缓确认和发布。
+独立于本项目代码发布；公开 checkpoint card 已记录 Apache-2.0 发布方式和
+上游 provenance / attribution。
 
 ### Optimizer 与 scheduler 配置
 
@@ -77,8 +78,13 @@ Optimizer、scheduler 和随机状态组成的 `training_state` 不在准备的�
 中。因此 checkpoint 可以用于推理或作为新的 fine-tuning 起点，但不能作为
 精确的中途 resume 包。
 
-本机验证确认两个最终模型产物均可读取且结构完整。它们不包含在当前 release
-中，本文也不发布其本机路径和 checksum。
+本机验证确认两个最终模型产物均可读取且结构完整。它们不内置在 GitHub
+仓库中，公开 Hub 仓库见下表；本文不发布其本机路径。
+
+| Run | 公开 checkpoint | 许可证 |
+| --- | --- | --- |
+| Manual 70 | [`zys1030/smolvla-block-rot-manual-70ep-50k`](https://huggingface.co/zys1030/smolvla-block-rot-manual-70ep-50k) | Apache-2.0 |
+| Shared Autonomy 70 | [`zys1030/smolvla-block-rot-sa-70ep-50k`](https://huggingface.co/zys1030/smolvla-block-rot-sa-70ep-50k) | Apache-2.0 |
 
 ## 5. 复现边界
 

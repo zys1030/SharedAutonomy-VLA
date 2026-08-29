@@ -2,7 +2,7 @@
 
 Language: English | [简体中文](results.zh-CN.md)
 
-> Release status: the numerical record and evaluation labels are frozen. External publication of the datasets, videos, and checkpoints is currently deferred; this page intentionally makes no external revision, checksum, or license claim.
+> Release status: the numerical record and evaluation labels are frozen. The two exported datasets and final checkpoints are public on the Hugging Face Hub; raw recordings, standalone private videos, and training logs remain outside the public release.
 
 ## Summary
 
@@ -145,8 +145,10 @@ For broader scope and interpretation limits, see [`limitations.md`](limitations.
 
 - [`results.json`](results.json): authoritative machine-readable protocol, condition grid, aggregate results, and release metadata.
 - [`evaluation_records.csv`](evaluation_records.csv): all 36 paired conditions with normalized success labels, primary failure types, quality flags, and public notes.
-- [`datasets.md`](datasets.md): locked dataset counts, public data contract, lineage, and deferred release metadata.
-- [`training.md`](training.md): locked training recipe, sanitized loss/gradient/learning-rate curves, checkpoint selection, and training interpretation limits.
+- [`datasets.md`](datasets.md): locked dataset counts, public data contract, lineage, and public dataset links.
+- [`training.md`](training.md): locked training recipe, sanitized loss/gradient/learning-rate curves, checkpoint selection, and public checkpoint links.
+- Public datasets: [`Manual 70`](https://huggingface.co/datasets/zys1030/sharedautonomy-vla-block-rot-manual-70ep) and [`Shared Autonomy 70`](https://huggingface.co/datasets/zys1030/sharedautonomy-vla-block-rot-sa-70ep).
+- Public checkpoints: [`Manual 70 SmolVLA`](https://huggingface.co/zys1030/smolvla-block-rot-manual-70ep-50k) and [`Shared Autonomy 70 SmolVLA`](https://huggingface.co/zys1030/smolvla-block-rot-sa-70ep-50k).
 - [`../scripts/plot_evaluation_results.py`](../scripts/plot_evaluation_results.py): regenerates the public SVG directly from the JSON and CSV sources.
 
 ```bash

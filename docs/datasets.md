@@ -2,16 +2,16 @@
 
 Language: English | [简体中文](datasets.zh-CN.md)
 
-> Release status: the dataset records used by the locked comparison are documented here, but the datasets and videos are not currently published. No public repository ID, immutable revision, checksum, or dataset/media license is claimed yet.
+> Release status: the two exported datasets used by the locked comparison are public on the Hugging Face Hub under CC BY 4.0. Raw native recordings and standalone private videos remain outside the public release.
 
 ## 1. Locked comparison datasets
 
 The main comparison uses two datasets collected for the same task contract and exported with the same data mapping:
 
-| Dataset | Collection mode | Episodes | Frames | FPS | Task |
-| --- | --- | ---: | ---: | ---: | --- |
-| Manual 70 | Manual Cartesian teleoperation and gripper control | 70 | 15,829 | 10 | `shape_pick_place_v1 / block_rotation_rq2` |
-| Shared Autonomy 70 | Human Cartesian/gripper control with bounded J6 yaw assistance | 70 | 14,212 | 10 | `shape_pick_place_v1 / block_rotation_rq2` |
+| Dataset | Collection mode | Episodes | Frames | FPS | Task | Public repository |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| Manual 70 | Manual Cartesian teleoperation and gripper control | 70 | 15,829 | 10 | `shape_pick_place_v1 / block_rotation_rq2` | [`zys1030/sharedautonomy-vla-block-rot-manual-70ep`](https://huggingface.co/datasets/zys1030/sharedautonomy-vla-block-rot-manual-70ep) |
+| Shared Autonomy 70 | Human Cartesian/gripper control with bounded J6 yaw assistance | 70 | 14,212 | 10 | `shape_pick_place_v1 / block_rotation_rq2` | [`zys1030/sharedautonomy-vla-block-rot-sa-70ep`](https://huggingface.co/datasets/zys1030/sharedautonomy-vla-block-rot-sa-70ep) |
 
 The episode budget is matched. Frame counts differ because the demonstrations have different durations. The stable task text and publication boundary are defined in [`tasks/shape_pick_place_v1.md`](tasks/shape_pick_place_v1.md).
 
@@ -67,14 +67,17 @@ Exports are treated as reproducible derivatives: a new export uses a new dataset
 
 Only the two 70-episode datasets above support the locked Manual-versus-Shared-Autonomy result. Earlier ACT, aligned-cube, handle-based, color-binding, partial, and superseded snapshots are development history and must not be mixed into this comparison. Their high-level role is summarized only where it helps interpret the final experiment.
 
-The current code release does not include raw episodes, exported datasets, videos, training logs, model weights, machine-local configuration, or private field notes.
+The current code release does not include raw episodes, standalone private
+videos, training logs, model weights, machine-local configuration, or private
+field notes. The exported LeRobot datasets are hosted in the public repositories
+listed above.
 
 ## 5. Release boundary
 
 The current code/document release publishes the data contract and lineage, not
-the raw episodes, exported datasets, or videos. If the external datasets are
-released later, their public metadata must match the locked task, counts,
-features, and limitations in this page and [`results.json`](results.json).
-See [`training.md`](training.md) for the training recipe, [`results.md`](results.md)
-for the evaluation, and [`limitations.md`](limitations.md) for interpretation
-boundaries.
+the raw episodes or standalone private videos. The two public exported
+datasets are released under CC BY 4.0; their public metadata must match the
+locked task, counts, features, and limitations in this page and
+[`results.json`](results.json). The corresponding public checkpoints are linked
+from [`training.md`](training.md). See [`results.md`](results.md) for the
+evaluation and [`limitations.md`](limitations.md) for interpretation boundaries.

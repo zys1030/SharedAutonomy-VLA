@@ -2,7 +2,7 @@
 
 Language: English | [简体中文](training.zh-CN.md)
 
-> Status: This page records the training facts and sanitized curves needed to interpret the locked comparison. External publication of the datasets, videos, and checkpoints is currently deferred; the raw logs and local artifacts remain private.
+> Status: This page records the training facts, public dataset links, public checkpoint links, and sanitized curves needed to interpret the locked comparison. Raw recordings, standalone private videos, raw logs, and local artifacts remain private.
 
 ## 1. Scope
 
@@ -35,12 +35,13 @@ with an action chunk size of 50.
 
 The recorded policy initialization references:
 
-- Base policy: `lerobot/smolvla_base`
-- Vision-language backbone: `HuggingFaceTB/SmolVLM2-500M-Video-Instruct`
+- Base policy: [`lerobot/smolvla_base`](https://huggingface.co/lerobot/smolvla_base)
+- Vision-language backbone: [`HuggingFaceTB/SmolVLM2-500M-Video-Instruct`](https://huggingface.co/HuggingFaceTB/SmolVLM2-500M-Video-Instruct)
 
 These upstream identifiers are recorded for reproducibility. Their release
-terms and any external redistribution of fine-tuned checkpoints remain
-separate from this project code release.
+terms and attribution notices remain separate from this project code release;
+the public checkpoint cards record the downstream Apache-2.0 release and
+upstream provenance.
 
 ### Optimizer and scheduler settings
 
@@ -86,8 +87,13 @@ inference or used as a new fine-tuning starting point, but it is not an exact
 mid-run resume package.
 
 Both final model artifacts were locally validated as readable and structurally
-complete. They are not included in the current release, and their local paths
-and checksums are not published here.
+complete. They are not vendored in the GitHub repository; the public Hub
+repositories are listed below. Their local paths are not published here.
+
+| Run | Public checkpoint | License |
+| --- | --- | --- |
+| Manual 70 | [`zys1030/smolvla-block-rot-manual-70ep-50k`](https://huggingface.co/zys1030/smolvla-block-rot-manual-70ep-50k) | Apache-2.0 |
+| Shared autonomy 70 | [`zys1030/smolvla-block-rot-sa-70ep-50k`](https://huggingface.co/zys1030/smolvla-block-rot-sa-70ep-50k) | Apache-2.0 |
 
 ## 5. Reproduction boundary
 
